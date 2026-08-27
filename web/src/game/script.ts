@@ -1346,7 +1346,10 @@ class Game {
     } else if (award.kind === 'double') {
       seat.score *= 2;
     }
-    await this.updateMoney(this.curPlayer, scoreBefore);
+    // Плюс / keep: score unchanged — do not restack the coin pile.
+    if (award.kind !== 'keep') {
+      await this.updateMoney(this.curPlayer, scoreBefore);
+    }
     this.syncDebug();
     return true;
   }
