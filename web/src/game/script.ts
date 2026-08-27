@@ -3,7 +3,7 @@ import type { TopPlayerRecord } from '../assets/pic';
 import { decodeCp866, encodeCp866 } from '../encoding/cp866';
 import type { Machine } from '../engine/types';
 import { BACKBUF, BACKBUF2, INFINITE, SCREEN_W } from '../engine/types';
-import type { HostTts, TtsRole } from '../engine/tts';
+import type { HostSpeech, HostTts, TtsRole } from '../engine/tts';
 import { hostSpeechText, spokenCasing } from '../engine/tts';
 import { PLAYERS_ENTER_UNDER_HOST, PLAYERS_ENTER_VOLUME, type GameSfx, type SfxId, type SfxPlayOptions } from '../engine/sfx';
 import { defaultAssetSpec } from '../spec';
@@ -49,14 +49,16 @@ export function playerVoiceRole(spriteId: number | null, name: string, human: bo
 }
 
 const MONEY_RECOUNT_TICK_MS = 2;
-const MONEY_RECOUNT_MAX_MS = 4000;
+const MONEY_RECOUNT_MAX_MS = 3000;
+const MONEY_RECOUNT_MAX_MS_UNDER_10K = 1000;
 
-/** How many coins share one original 2 ms tick so the stack finishes in ≤4 s. */
+/** How many coins share one original 2 ms tick. <10k → ≤1 s; otherwise ≤3 s. */
 export function moneyRecountStride(score: number): number {
   if (score <= 1) {
     return 1;
   }
-  const maxTicks = Math.max(1, Math.floor(MONEY_RECOUNT_MAX_MS / MONEY_RECOUNT_TICK_MS));
+  const capMs = score < 10_000 ? MONEY_RECOUNT_MAX_MS_UNDER_10K : MONEY_RECOUNT_MAX_MS;
+  const maxTicks = Math.max(1, Math.floor(capMs / MONEY_RECOUNT_TICK_MS));
   return Math.max(1, Math.ceil(score / maxTicks));
 }
 
@@ -584,10 +586,15 @@ class Game {
   }
 
   /** DIFF #21: every seat names the letter aloud; NPC still gets the bubble. */
-  private async announceLetter(letterChar: string, n: number): Promise<void> {
+  private speakLetterChoice(letterChar: string, n: number): HostSpeech | null {
     const text = n === 0 ? `Буква ${letterChar}` : `${n}-я буква`;
     const spoken = spokenCasing(text);
-    const speech = this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
+    return this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
+  }
+
+  private async announceLetter(letterChar: string, n: number): Promise<void> {
+    const text = n === 0 ? `Буква ${letterChar}` : `${n}-я буква`;
+    const speech = this.speakLetterChoice(letterChar, n);
     if (!this.isHuman(this.curPlayer)) {
       const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
       const s = this.screen;
@@ -600,23 +607,19 @@ class Game {
         await this.waitKey(1000);
       }
       s.screenCopy(84, 39, bubbleOfs, BACKBUF2);
-      return;
-    }
-    if (speech) {
-      await speech.ended;
     }
   }
 
-  /** dpr:560-587 */
-  private async updateMoney(seatIdx: number): Promise<void> {
-    const s = this.screen;
+  /** dpr:560-587. Skip the coin pile when the score did not go up. */
+  private async updateMoney(seatIdx: number, fromScore: number): Promise<void> {
     const seat = this.seats[seatIdx];
-    const { moneyOfs } = liveSeat(seatIdx);
-    s.fillRect(moneyOfs - 644, 30, 84, 7);
-    if (seat.score === 0) {
-      s.drawSprite(SPRITE.SNIKERS, moneyOfs, 2);
+    if (seat.score <= fromScore) {
+      this.paintScore(seatIdx);
       return;
     }
+    const s = this.screen;
+    const { moneyOfs } = liveSeat(seatIdx);
+    s.fillRect(moneyOfs - 644, 30, 84, 7);
     const stride = moneyRecountStride(seat.score);
     for (let i = 1; i <= seat.score; i += 1) {
       s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
@@ -626,14 +629,7 @@ class Game {
         await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
       }
     }
-    s.drawSprite(SPRITE.MONEY, moneyOfs, 1);
-    const text = String(seat.score);
-    const center = moneyOfs + 0x22 - (text.length << 2) + 4 * SCREEN_W;
-    s.print(text, center - 641, 0, 14, 8);
-    s.print(text, center - 639, 0, 14, 8);
-    s.print(text, center + 639, 0, 14, 8);
-    s.print(text, center + 641, 0, 14, 8);
-    s.print(text, center, 15, 14, 8);
+    this.paintScore(seatIdx);
   }
 
   /**
@@ -929,7 +925,7 @@ class Game {
       }
       s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
       this.drawFortuneWheel(this.curSector);
-      await this.updateMoney(j);
+      await this.updateMoney(j, 0);
       this.syncDebug();
       await this.delay(500);
     }
@@ -1038,15 +1034,20 @@ class Game {
     if (choice === k) {
       this.playSfx('boxMoney');
       await this.yakubovichReply('Браво!!!', 'Вы отгадали!');
+      const before = seat.score;
       seat.score += 100;
+      await this.waitKey(INFINITE);
+      await this.yakubovichSetSilent();
+      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      await this.updateMoney(this.curPlayer, before);
     } else {
       this.playSfx('boxEmpty');
       await this.yakubovichReply('Увы! Эта', 'шкатулка пуста!');
+      await this.waitKey(INFINITE);
+      await this.yakubovichSetSilent();
+      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      await this.updateMoney(this.curPlayer, seat.score);
     }
-    await this.waitKey(INFINITE);
-    await this.yakubovichSetSilent();
-    s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-    await this.updateMoney(this.curPlayer);
     this.movesForBox = 0;
   }
 
@@ -1098,7 +1099,8 @@ class Game {
 
   /** dpr:1229-1244. DIFF #26: friction spin, ~9 s, several revolutions. */
   private async spinWheel(): Promise<void> {
-    const totalSteps = 4 * WHEEL_SECTOR_COUNT + this.random(WHEEL_SECTOR_COUNT);
+    // Same friction curve; fewer sectors ⇒ lower ω₀. No extra full turns required.
+    const totalSteps = WHEEL_SECTOR_COUNT + this.random(WHEEL_SECTOR_COUNT);
     const durationMs = SPIN_DURATION_MS + this.random(SPIN_DURATION_JITTER_MS);
     const startDeg = -this.curSector * WHEEL_STEP_DEG;
     const deltaDeg = -totalSteps * WHEEL_STEP_DEG;
@@ -1240,6 +1242,10 @@ class Game {
     const letterChar = decodeCp866(new Uint8Array([letterByte]));
     this.available[letterIdx] = 0x20;
     this.syncDebug();
+    // WEB: speak the pick immediately; do not wait for TTS before the board.
+    if (this.isHuman(this.curPlayer)) {
+      this.speakLetterChoice(letterChar, n);
+    }
 
     // Letter disappear effect on the alphabet row (dpr:1410-1424), immediately.
     const cell = 0x14c * SCREEN_W + letterIdx * 20;
@@ -1256,7 +1262,9 @@ class Game {
       }
       await this.m.audio.playWav(this.audioBuf.subarray(0, k));
     }
-    await this.announceLetter(letterChar, n);
+    if (!this.isHuman(this.curPlayer)) {
+      await this.announceLetter(letterChar, n);
+    }
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).
@@ -1286,23 +1294,11 @@ class Game {
     }
 
     if (n === 0) {
-      this.playSfx('letterCorrect');
-      await this.yakubovichReply('Есть такая буква!', 'Браво!!');
-      await this.waitKey(2000);
-    } else {
-      this.playSfx('letterCorrect');
+      void this.yakubovichTalk('Есть такая буква!', 'Браво!!');
     }
     s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
-    let j2 = 0;
-    for (let i = 20; i <= 0x64; i += 1) {
-      j2 = this.m.audio.pwm(this.audioBuf, j2, i, 1);
-      j2 = this.m.audio.pwm(this.audioBuf, j2, 0, Math.floor((100 - i) / 5));
-    }
-    await this.m.audio.playWav(this.audioBuf.subarray(0, j2), { audible: true });
-    await this.yakubovichSetSilent();
 
-    // Assistant walk (dpr:1456-1480). Live PWM is otherwise muted (DIFF #25);
-    // keep the original PC-speaker ticks for her steps to the board.
+    // Assistant walk (dpr:1456-1480). WEB: she starts at once; card sting after each flip.
     const stepDelta = [3, 10, 0, 12];
     const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
     let i3 = 0;
@@ -1313,13 +1309,13 @@ class Game {
         walk = assistPos[k];
         blitOfs = walk;
         s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-        await this.waitKey(500);
         const f = BACKBUF + assistPos[k] + assistStandShift + 11 * SCREEN_W;
         k -= 1;
         s.fillRect(f, 19, 15, 7);
         s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
         s.screenCopy(15, 19, f - BACKBUF, f);
         s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+        this.playSfx('letterCorrect');
         await this.waitKey(150);
       } else {
         const nextStep = stepDelta[(i3 + 1) & 3];
@@ -1344,12 +1340,13 @@ class Game {
     }
     await this.m.audio.playWav(this.audioBuf.subarray(0, k2), { audible: true });
 
+    const scoreBefore = seat.score;
     if (award.kind === 'perHit') {
       seat.score += award.unit * hits;
     } else if (award.kind === 'double') {
       seat.score *= 2;
     }
-    await this.updateMoney(this.curPlayer);
+    await this.updateMoney(this.curPlayer, scoreBefore);
     this.syncDebug();
     return true;
   }
@@ -1445,8 +1442,9 @@ class Game {
       case 'bankrupt': {
         this.playSfx('bankrupt');
         await this.yakubovichTalk('Все деньги сгорели!', 'Увы! Переход хода..');
+        const burned = seat.score;
         seat.score = 0;
-        await this.updateMoney(this.curPlayer);
+        await this.updateMoney(this.curPlayer, burned);
         return 'next';
       }
       case 'zero': {

@@ -75,6 +75,9 @@ app.innerHTML = `
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
+          <button id="audio-gate" class="audio-gate" type="button" hidden>
+            Коснитесь экрана, чтобы включить звук
+          </button>
         </div>
       </div>
 
@@ -161,6 +164,7 @@ function requireElement<T extends Element>(selector: string): T {
 }
 
 const canvas = requireElement<HTMLCanvasElement>('#screen');
+const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
@@ -496,6 +500,32 @@ function unlockAudio(): void {
   });
   hostTts.prime();
   gameSfx.prime();
+}
+
+function skipAudioGate(): boolean {
+  return Boolean(typeof navigator !== 'undefined' && navigator.webdriver) || speedFactor !== 1;
+}
+
+function waitForAudioGesture(): Promise<void> {
+  if (skipAudioGate()) {
+    unlockAudio();
+    return Promise.resolve();
+  }
+  audioGate.hidden = false;
+  return new Promise((resolve) => {
+    let done = false;
+    const go = (): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      audioGate.hidden = true;
+      unlockAudio();
+      resolve();
+    };
+    audioGate.addEventListener('pointerdown', go);
+    audioGate.addEventListener('click', go);
+  });
 }
 
 function toggleFullscreen(): void {
@@ -891,7 +921,7 @@ async function loadBundledAssets(): Promise<void> {
 
   if (!assetsReady) {
     assetsReady = true;
-    void gameLoop();
+    void waitForAudioGesture().then(() => gameLoop());
   } else {
     abortCurrentRun('assets-reloaded');
   }

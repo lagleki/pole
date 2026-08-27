@@ -82,8 +82,11 @@ function sfxUrl(file: string): string {
  * HTMLAudio playback. Skipped when muted, in Node, or under Playwright
  * (`navigator.webdriver`), matching host TTS.
  */
+const SFX_IDS = Object.keys(SFX_FILES) as SfxId[];
+
 export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
   const players = new Map<SfxId, HTMLAudioElement>();
+  const pending = new Map<SfxId, SfxPlayOptions>();
 
   const element = (id: SfxId): HTMLAudioElement | null => {
     if (typeof Audio === 'undefined') {
@@ -93,9 +96,34 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
     if (!player) {
       player = new Audio(sfxUrl(SFX_FILES[id]));
       player.preload = 'auto';
+      player.setAttribute('playsinline', '');
       players.set(id, player);
     }
     return player;
+  };
+
+  const start = (id: SfxId, playOptions: SfxPlayOptions): void => {
+    const player = element(id);
+    if (!player) {
+      return;
+    }
+    const restart = playOptions.restart !== false;
+    player.loop = Boolean(playOptions.loop);
+    player.volume = clampVolume(playOptions.volume ?? 1);
+    player.muted = false;
+    if (restart) {
+      try {
+        player.currentTime = 0;
+      } catch {
+        /* empty */
+      }
+    }
+    const p = player.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => {
+        pending.set(id, playOptions);
+      });
+    }
   };
 
   return {
@@ -103,50 +131,49 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
       if (typeof Audio === 'undefined' || isWebDriver()) {
         return;
       }
-      const player = element('sting');
-      if (!player) {
-        return;
-      }
-      player.muted = true;
-      const p = player.play();
-      if (p && typeof p.then === 'function') {
-        void p
+      // Android Chrome unlocks each HTMLAudioElement only after play() in a gesture.
+      const unlocks = SFX_IDS.map((id) => {
+        const player = element(id);
+        if (!player) {
+          return Promise.resolve();
+        }
+        player.muted = true;
+        const p = player.play();
+        if (!p || typeof p.then !== 'function') {
+          player.muted = false;
+          return Promise.resolve();
+        }
+        return p
           .then(() => {
             player.pause();
-            player.currentTime = 0;
+            try {
+              player.currentTime = 0;
+            } catch {
+              /* empty */
+            }
             player.muted = false;
           })
           .catch(() => {
             player.muted = false;
           });
-      }
+      });
+      void Promise.all(unlocks).then(() => {
+        const queued = [...pending.entries()];
+        pending.clear();
+        for (const [id, playOptions] of queued) {
+          if (options.getEnabled()) {
+            start(id, playOptions);
+          }
+        }
+      });
     },
 
     play(id: SfxId, playOptions: SfxPlayOptions = {}): void {
       if (!options.getEnabled() || isWebDriver()) {
         return;
       }
-      const player = element(id);
-      if (!player) {
-        return;
-      }
-      const restart = playOptions.restart !== false;
-      player.loop = Boolean(playOptions.loop);
-      player.volume = clampVolume(playOptions.volume ?? 1);
-      player.muted = false;
-      if (restart) {
-        try {
-          player.currentTime = 0;
-        } catch {
-          /* empty */
-        }
-      }
-      const p = player.play();
-      if (p && typeof p.catch === 'function') {
-        p.catch(() => {
-          /* autoplay until prime() */
-        });
-      }
+      pending.delete(id);
+      start(id, playOptions);
     },
 
     setVolume(id: SfxId, volume: number): void {
@@ -167,12 +194,14 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
         }
       };
       if (id) {
+        pending.delete(id);
         const player = players.get(id);
         if (player) {
           stopOne(player);
         }
         return;
       }
+      pending.clear();
       for (const player of players.values()) {
         stopOne(player);
       }

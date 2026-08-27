@@ -185,6 +185,29 @@ body::after {
   border-radius: 4px;
 }
 
+.audio-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1rem;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(7, 9, 15, 0.72);
+  color: var(--ega-cyan);
+  font: inherit;
+  font-size: clamp(14px, 2.4vw, 22px);
+  text-align: center;
+  cursor: pointer;
+}
+
+.audio-gate[hidden] {
+  display: none;
+}
+
 #screen {
   position: relative;
   z-index: 2;

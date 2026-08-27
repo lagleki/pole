@@ -85,8 +85,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     through TTS in a male or female voice (NPC gender; human names ending
     in А/Я are treated as female except a short list like Илья/Никита).
     That voice is not the host’s. NPC talk bubbles are unchanged.
-    Web sound defaults to ON so the host is audible after the first gesture;
-    Ctrl+S / the sound button still mute both TTS and SFX. Spin/round-win
+    Web sound defaults to ON so the host is audible after the first gesture
+    (Android Chrome blocks intro mp3s until a tap; the play view waits for
+    that tap and then unlocks every SFX element). Ctrl+S / the sound button still mute both TTS and SFX. Spin/round-win
     lines use the name typed at presentation (not «2-ой игрок»). Punctuation
     from the lines and CHGK prompts is kept in the TTS string (commas between
     a name and a new sentence; remote URLs encode ? ! . , and clip at a
@@ -115,7 +116,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     (zvukipro.com; files in `web/public/assets/sfx/`).     PWM still runs for
     delay and RNG timing; the browser mutes the square wave except the
     assistant’s walk to the board and the money-stack recount ticks
-    (original PC-speaker). Recount animation is capped at 4 s. After the splash theme, «выход участников» plays as a quiet
+    (original PC-speaker). Recount animation is at most 1 s below 10 000
+    and 3 s above (drum values are 350+). No pile animation when the
+    score did not increase. After the splash theme, «выход участников» plays as a quiet
     bed and ducks further before «И вот задание на этот тур». Host TTS
     (DIFF #21) is unchanged. Playwright skips audible samples.
 26. **Classic 36-sector TV drum.** Live play no longer uses the DOS 16 wedges
@@ -126,7 +129,8 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     point value. The SVG rotates opposite the sector index so the arrow, the
     host line and the score all name the same wedge. The disk rotates
     continuously for about 8–10 s (mean 9 s) under Coulomb plus viscous
-    friction mixed toward constant speed at the start (ω̇ = −α − βω), not in 10° jumps. The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
+    friction (ω̇ = −α − βω), not in 10° jumps. Initial ω is lower because
+    the disk only needs about one extra turn, not several revolutions. The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
     Sectors alternate black/white as before. The disk is larger than the DOS
     cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
     The canvas sits above the SVG with a circular hole so the drum tucks
