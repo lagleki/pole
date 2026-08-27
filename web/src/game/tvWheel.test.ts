@@ -66,12 +66,13 @@ describe('cruise-then-brake spin delays', () => {
   it('eases out under Coulomb+viscous friction (more angle early, crawl at the end)', () => {
     expect(spinEase(0)).toBe(0);
     expect(spinEase(1)).toBe(1);
-    expect(spinFrictionProgress(0.5)).toBeGreaterThan(0.65);
-    expect(spinFrictionProgress(0.5)).toBeLessThan(0.9);
-    expect(spinFrictionProgress(0.9)).toBeGreaterThan(0.95);
-    const v0 = spinFrictionProgress(0.1) - spinFrictionProgress(0);
-    const vMid = spinFrictionProgress(0.55) - spinFrictionProgress(0.45);
-    const vEnd = spinFrictionProgress(1) - spinFrictionProgress(0.9);
+    expect(spinEase(0.5)).toBeGreaterThan(0.54);
+    expect(spinEase(0.5)).toBeLessThan(0.68);
+    expect(spinFrictionProgress(0.5)).toBeGreaterThan(0.72);
+    expect(spinFrictionProgress(0.5)).toBeLessThan(0.82);
+    const v0 = spinEase(0.1) - spinEase(0);
+    const vMid = spinEase(0.55) - spinEase(0.45);
+    const vEnd = spinEase(1) - spinEase(0.9);
     expect(v0).toBeGreaterThan(vMid);
     expect(vMid).toBeGreaterThan(vEnd);
   });

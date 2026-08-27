@@ -69,7 +69,7 @@ describe('svg wheel', () => {
     expect(svg).not.toContain('ПРИЗ');
     expect(svgWheelLayout.box).toEqual({ x: 128, y: 154, width: 223, height: 172 });
     expect(svgWheelLayout.center.x).toBe(128 + 223 / 2);
-    expect(svgWheelLayout.center.y).toBeGreaterThan(280);
+    expect(svgWheelLayout.center.y).toBe(328);
     expect(svgWheelLayout.radii.x).toBeGreaterThan(120);
     expect(svgWheelLayout.radii.x).toBe(svgWheelLayout.radii.y);
     expect(svg).toContain('id="wheel-letter-clip"');
@@ -96,8 +96,11 @@ describe('svg wheel', () => {
     expect(rgba[hubI]).toBe(0);
     const letterRow = (0x14c * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[letterRow]).toBe(255);
-    const handOpaque = (0x13a * 640 + 240) * 4 + 3;
-    expect(rgba[handOpaque]).toBe(255);
+    const handOpaque = (0x13a * 640 + 240) * 4;
+    expect(rgba[handOpaque]).toBe(0);
+    expect(rgba[handOpaque + 1]).toBe(0);
+    expect(rgba[handOpaque + 2]).toBe(0xaa);
+    expect(rgba[handOpaque + 3]).toBe(255);
     const handTransparent = (0x13a * 640 + 241) * 4 + 3;
     expect(rgba[handTransparent]).toBe(0);
     const outsideDisk = (Math.floor(hub.y) * 640 + Math.floor(hub.x + svgWheelLayout.radii.x + 8)) * 4 + 3;

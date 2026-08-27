@@ -97,6 +97,13 @@ const FEMALE_VOICE =
   /milena|katya|irina|iryna|elena|alena|tatyana|tatiana|xenia|ksenia|anna|maria|olga|svetlana|female|женск/i;
 
 /** Male host voice only — female system voices are skipped for Yakubovich. */
+export const TTS_LANG = 'ru-RU';
+
+/** Android/WebView often tags voices as `ru_RU` instead of `ru-RU`. */
+export function isRussianVoiceLang(lang: string | undefined): boolean {
+  return /^ru([-_]|$)/i.test((lang ?? '').replace(/_/g, '-'));
+}
+
 export function pickRussianVoice(
   voices: readonly SpeechSynthesisVoice[],
   gender: 'male' | 'female' = 'male',
@@ -104,8 +111,13 @@ export function pickRussianVoice(
   if (voices.length === 0) {
     return null;
   }
-  const ru = voices.filter((item) => /^ru\b/i.test(item.lang));
-  const pool = ru.length > 0 ? ru : [...voices];
+  const ru = voices.filter(
+    (item) => isRussianVoiceLang(item.lang) || /русск|russian/i.test(item.name),
+  );
+  const pool = ru.length > 0 ? ru : [];
+  if (pool.length === 0) {
+    return null;
+  }
   if (gender === 'female') {
     const named = pool.filter((item) => FEMALE_VOICE.test(item.name) && !MALE_VOICE.test(item.name));
     const ranked = named.length > 0 ? named : pool.filter((item) => !MALE_VOICE.test(item.name));
@@ -320,8 +332,10 @@ export function createHostTts(options: HostTtsOptions): HostTts {
     stopNative();
     const utterance = new SpeechSynthesisUtterance(text);
     currentNative = utterance;
-    utterance.lang = selectedVoice.lang || 'ru-RU';
     utterance.voice = selectedVoice;
+    // Force BCP-47 Russian after assigning the voice — Android otherwise
+    // keeps the voice's lang tag (sometimes en-US / ru_RU) and reads as English.
+    utterance.lang = TTS_LANG;
     if (role === 'host') {
       utterance.rate = 1.02;
       utterance.pitch = 0.88;

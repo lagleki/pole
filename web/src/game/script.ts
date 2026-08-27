@@ -1098,7 +1098,7 @@ class Game {
 
   /** dpr:1229-1244. DIFF #26: friction spin, ~9 s, several revolutions. */
   private async spinWheel(): Promise<void> {
-    const totalSteps = 5 * WHEEL_SECTOR_COUNT + this.random(WHEEL_SECTOR_COUNT);
+    const totalSteps = 4 * WHEEL_SECTOR_COUNT + this.random(WHEEL_SECTOR_COUNT);
     const durationMs = SPIN_DURATION_MS + this.random(SPIN_DURATION_JITTER_MS);
     const startDeg = -this.curSector * WHEEL_STEP_DEG;
     const deltaDeg = -totalSteps * WHEEL_STEP_DEG;
@@ -1166,6 +1166,7 @@ class Game {
       await this.delay(10);
     }
     s.screenCopy(15, 26, hand.ofs, BACKBUF + hand.ofs);
+    hand.step = 0;
     return n;
   }
 
@@ -1199,6 +1200,7 @@ class Game {
         await this.delay(10);
       }
       s.screenCopy(20, 26, hand.ofs, BACKBUF + hand.ofs);
+      hand.step = 0;
       return i;
     }
 
@@ -1230,15 +1232,16 @@ class Game {
     this.setScene('letter-open');
     const s = this.screen;
     const seat = this.seats[this.curPlayer];
+    // WEB: hide the finger and lift the alphabet tile on click, then score.
+    this.m.input.hand.step = 0;
+    s.screenCopy(20, 26, this.m.input.hand.ofs, BACKBUF + this.m.input.hand.ofs);
 
-    await this.m.audio.sound(100, 32);
     const letterByte = this.available[letterIdx];
     const letterChar = decodeCp866(new Uint8Array([letterByte]));
     this.available[letterIdx] = 0x20;
+    this.syncDebug();
 
-    await this.announceLetter(letterChar, n);
-
-    // Letter disappear effect on the alphabet row (dpr:1410-1424).
+    // Letter disappear effect on the alphabet row (dpr:1410-1424), immediately.
     const cell = 0x14c * SCREEN_W + letterIdx * 20;
     for (let i = 0; i <= 3; i += 1) {
       if (i < 3) {
@@ -1253,6 +1256,7 @@ class Game {
       }
       await this.m.audio.playWav(this.audioBuf.subarray(0, k));
     }
+    await this.announceLetter(letterChar, n);
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).

@@ -21,7 +21,7 @@ const { x: BOX_X, y: BOX_Y, width: BOX_W } = defaultRenderSpec.wheel.clearRect;
 const CLIP_Y = 0x14c;
 const HUB_X = BOX_X + BOX_W / 2;
 /** Shifted down vs the DOS cell center so a bigger disk tucks under the letters. */
-const HUB_Y = 310;
+const HUB_Y = 328;
 const R = 136;
 const PEG = 11;
 /** Punch only the disk (not the pegs) so bricks stay visible around the handles. */
@@ -208,8 +208,9 @@ export interface WheelHoleKeep {
 /**
  * Make the drum disk transparent on the DOS canvas so the SVG overlay
  * (stacked behind) shows through down to the alphabet row — players and
- * name plates included. Non-transparent pixels of `keep` (the pointing hand)
- * stay opaque.
+ * name plates included. The pointing hand is then painted from the sprite
+ * itself (not leftover floor pixels), so moving it cannot leave a gray
+ * silhouette on the hole.
  */
 export function punchWheelHole(rgba: Uint8ClampedArray, keep?: WheelHoleKeep | null): void {
   const holeR2 = HOLE_R * HOLE_R;
@@ -217,8 +218,6 @@ export function punchWheelHole(rgba: Uint8ClampedArray, keep?: WheelHoleKeep | n
   const x1 = Math.min(SCREEN_W, Math.ceil(HUB_X + HOLE_R));
   const y0 = Math.max(0, Math.floor(HUB_Y - HOLE_R));
   const y1 = Math.min(CLIP_Y, Math.ceil(HUB_Y + HOLE_R));
-  const keepX = keep ? keep.ofs % SCREEN_W : 0;
-  const keepY = keep ? Math.floor(keep.ofs / SCREEN_W) : 0;
 
   for (let y = y0; y < y1; y += 1) {
     const dy = y - HUB_Y;
@@ -228,20 +227,44 @@ export function punchWheelHole(rgba: Uint8ClampedArray, keep?: WheelHoleKeep | n
       if (dx * dx + dy2 > holeR2) {
         continue;
       }
-      let preserve = false;
-      if (keep) {
-        const lx = x - keepX;
-        const ly = y - keepY;
-        if (lx >= 0 && ly >= 0 && lx < keep.width && ly < keep.height) {
-          const value = keep.pixels[ly * keep.width + lx];
-          if (value !== keep.transparent) {
-            preserve = true;
-          }
-        }
+      rgba[(y * SCREEN_W + x) * 4 + 3] = 0;
+    }
+  }
+
+  if (keep) {
+    blitHandOverHole(rgba, keep);
+  }
+}
+
+function blitHandOverHole(rgba: Uint8ClampedArray, keep: WheelHoleKeep): void {
+  const palette = defaultRenderSpec.palette;
+  const keepX = keep.ofs % SCREEN_W;
+  const keepY = Math.floor(keep.ofs / SCREEN_W);
+  for (let ly = 0; ly < keep.height; ly += 1) {
+    const y = keepY + ly;
+    if (y < 0 || y >= CLIP_Y) {
+      continue;
+    }
+    for (let lx = 0; lx < keep.width; lx += 1) {
+      const value = keep.pixels[ly * keep.width + lx];
+      if (value === keep.transparent) {
+        continue;
       }
-      if (!preserve) {
-        rgba[(y * SCREEN_W + x) * 4 + 3] = 0;
+      const x = keepX + lx;
+      if (x < 0 || x >= SCREEN_W) {
+        continue;
       }
+      const dx = x - HUB_X;
+      const dy = y - HUB_Y;
+      if (dx * dx + dy * dy > HOLE_R * HOLE_R) {
+        continue;
+      }
+      const color = palette[value & 0x0f];
+      const i = (y * SCREEN_W + x) * 4;
+      rgba[i] = color[0];
+      rgba[i + 1] = color[1];
+      rgba[i + 2] = color[2];
+      rgba[i + 3] = 255;
     }
   }
 }

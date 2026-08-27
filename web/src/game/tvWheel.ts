@@ -90,8 +90,8 @@ export const WHEEL_STEP_DEG = 360 / WHEEL_SECTOR_COUNT;
 export const SPIN_DURATION_MS = 8000;
 export const SPIN_DURATION_JITTER_MS = 2001;
 export const SPIN_FRAME_MS = 16;
-/** βω₀/α at t=0 — viscous vs dry friction. */
-export const SPIN_VISCOUS_RATIO = 1.6;
+/** βω₀/α at t=0 — viscous vs dry friction. Lower = slower start, same stop time. */
+export const SPIN_VISCOUS_RATIO = 0.4;
 
 export function spinFrictionProgress(u: number, lambda = SPIN_VISCOUS_RATIO): number {
   const t = Math.min(1, Math.max(0, u));
@@ -110,7 +110,9 @@ export function spinFrictionProgress(u: number, lambda = SPIN_VISCOUS_RATIO): nu
 }
 
 export function spinEase(u: number): number {
-  return spinFrictionProgress(u);
+  const t = Math.min(1, Math.max(0, u));
+  // Mix Coulomb+viscous with linear so the first seconds are slower; T is unchanged.
+  return 0.7 * t + 0.3 * spinFrictionProgress(t);
 }
 
 /** @deprecated Kept for tests that inspect the old per-wedge table. */

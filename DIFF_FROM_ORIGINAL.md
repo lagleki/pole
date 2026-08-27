@@ -80,7 +80,7 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     Question-editor edits remain session-only with explicit OVL download.
 21. **Host TTS.** Yakubovich no longer prints a speech bubble or the round
     theme on the DOS surface — those lines go through the browser Speech
-    Synthesis API (`ru-RU`, prefer a local male voice). The PWM 7-burst
+    Synthesis API (`ru-RU` on every utterance, including Android `ru_RU` voices). The PWM 7-burst
     mumble still runs for RNG/timing (muted). Players say their letter
     through TTS in a male or female voice (NPC gender; human names ending
     in А/Я are treated as female except a short list like Илья/Никита).
@@ -126,9 +126,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     point value. The SVG rotates opposite the sector index so the arrow, the
     host line and the score all name the same wedge. The disk rotates
     continuously for about 8–10 s (mean 9 s) under Coulomb plus viscous
-    friction (ω̇ = −α − βω), not in 10° jumps. The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
+    friction mixed toward constant speed at the start (ω̇ = −α − βω), not in 10° jumps. The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
     Sectors alternate black/white as before. The disk is larger than the DOS
-    cell: the hub sits lower and the overlay is clipped at the alphabet row.
+    cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
     The canvas sits above the SVG with a circular hole so the drum tucks
     under the letters (players and name plates stay behind the disk) while
     the letter-pick hand stays on top. Seat 2 is shifted 24 px right.

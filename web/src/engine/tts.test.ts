@@ -5,9 +5,11 @@ import {
   createHostTts,
   googleTranslateTtsUrl,
   hostSpeechText,
+  isRussianVoiceLang,
   pickRussianVoice,
   responsiveVoiceTtsUrl,
   spokenCasing,
+  TTS_LANG,
 } from './tts';
 
 function voice(partial: Partial<SpeechSynthesisVoice> & Pick<SpeechSynthesisVoice, 'name' | 'lang'>): SpeechSynthesisVoice {
@@ -50,6 +52,11 @@ describe('pickRussianVoice', () => {
     expect(pickRussianVoice([voice({ name: 'Katya', lang: 'ru-RU' })])).toBeNull();
     expect(pickRussianVoice([voice({ name: 'Samantha', lang: 'en-US' })])).toBeNull();
     expect(pickRussianVoice([])).toBeNull();
+    expect(isRussianVoiceLang('ru_RU')).toBe(true);
+    expect(isRussianVoiceLang('ru-RU')).toBe(true);
+    expect(isRussianVoiceLang('en-US')).toBe(false);
+    expect(TTS_LANG).toBe('ru-RU');
+    expect(pickRussianVoice([voice({ name: 'Yuri', lang: 'ru_RU', localService: true })])?.name).toBe('Yuri');
   });
 
   it('picks a named female Russian voice for players', () => {
