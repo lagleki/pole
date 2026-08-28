@@ -1340,7 +1340,10 @@ class Game {
 
     this.m.input.hand.step = 0;
     this.clearAlphabetCell(letterIdx);
-    this.vanishAlphabetTile(letterIdx);
+    await this.vanishAlphabetTile(letterIdx);
+    // Redraw the full alphabet row so no artefacts remain on the layers below
+    // (sprites, name plates) after the tile animation clears the bottom strip.
+    this.paintAlphabetRow();
     const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
     await this.finishLetterAnnouncement(letterSpeech);
     await this.yakubovichSetSilent();

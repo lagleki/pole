@@ -213,22 +213,39 @@ export interface WheelHoleKeep {
  * itself (not leftover floor pixels), so moving it cannot leave a gray
  * silhouette on the hole.
  */
+/** Half-width of the soft feather band at the hole edge, in CSS pixels. */
+const FEATHER = 2;
+
 export function punchWheelHole(rgba: Uint8ClampedArray, keep?: WheelHoleKeep | null): void {
-  const holeR2 = HOLE_R * HOLE_R;
-  const x0 = Math.max(0, Math.floor(HUB_X - HOLE_R));
-  const x1 = Math.min(SCREEN_W, Math.ceil(HUB_X + HOLE_R));
-  const y0 = Math.max(0, Math.floor(HUB_Y - HOLE_R));
-  const y1 = Math.min(CLIP_Y, Math.ceil(HUB_Y + HOLE_R));
+  const outerR = HOLE_R + FEATHER;
+  const outerR2 = outerR * outerR;
+  const innerR = HOLE_R - FEATHER;
+  const innerR2 = innerR * innerR;
+
+  const x0 = Math.max(0, Math.floor(HUB_X - outerR));
+  const x1 = Math.min(SCREEN_W, Math.ceil(HUB_X + outerR));
+  const y0 = Math.max(0, Math.floor(HUB_Y - outerR));
+  const y1 = Math.min(CLIP_Y, Math.ceil(HUB_Y + outerR));
 
   for (let y = y0; y < y1; y += 1) {
     const dy = y - HUB_Y;
     const dy2 = dy * dy;
     for (let x = x0; x < x1; x += 1) {
       const dx = x - HUB_X;
-      if (dx * dx + dy2 > holeR2) {
+      const d2 = dx * dx + dy2;
+      if (d2 > outerR2) {
         continue;
       }
-      rgba[(y * SCREEN_W + x) * 4 + 3] = 0;
+      const i = (y * SCREEN_W + x) * 4 + 3;
+      if (d2 <= innerR2) {
+        // Fully inside — punch through.
+        rgba[i] = 0;
+      } else {
+        // Feather band: blend from opaque (outer edge) to transparent (inner edge).
+        const d = Math.sqrt(d2);
+        const t = (outerR - d) / (FEATHER * 2); // 0 at outer edge → 1 at inner edge
+        rgba[i] = Math.round(rgba[i] * (1 - t));
+      }
     }
   }
 
