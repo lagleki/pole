@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "decompile:assets": "node ./scripts/decompile-assets.mjs",
     "transcode:assets": "node ./scripts/transcode-assets.mjs",
+    "questions:add": "node ./scripts/add-tour-questions.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node ./scripts/playwright-smoke.mjs",

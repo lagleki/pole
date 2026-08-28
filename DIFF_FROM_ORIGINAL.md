@@ -96,7 +96,7 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     then ResponsiveVoice. Probe logs go to the console as `[pole-tts]`.
     Playwright (`navigator.webdriver`) skips audible TTS.
 22. **Tour prompts from CHGK Jeopardy.** Gameplay no longer uses POLE.OVL
-    category+word pairs. The live bank is a 684-question filter of the public
+    category+word pairs. The live bank is a 5816-question filter of the public
     Russian QA Jeopardy dataset (База вопросов ЧГК, http://db.chgk.info):
     one А–Я word as the board answer, with answers normalized to nominative
     singular where applicable. Names, titles, denominations, and pluralia
@@ -139,7 +139,7 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     The canvas sits above the SVG with a circular hole so the drum tucks
     under the letters (players and name plates stay behind the disk) while
     the letter-pick hand stays on top. The hub is 8 px left of the DOS cell
-    center. Seat 1 (2-ой игрок) is 4 px left and 72 px up; seat 2’s sprite
+    center. Seat 1 (2-ой игрок) is 4 px left and 24 px up; seat 2’s sprite
     stays 24 px right, its nameplate 8 px right so it sits under the sprite.
 27. **Studio entrance greeting.** Entering the hall no longer uses the DOS
     «Представляю участников!». The host speaks the TV catchphrase (Wikiquote /

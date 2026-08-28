@@ -71,7 +71,7 @@ describe('svg wheel', () => {
     expect(svg).not.toContain('ПРИЗ');
     expect(svgWheelLayout.box).toEqual({ x: 128, y: 154, width: 223, height: 172 });
     expect(svgWheelLayout.center.x).toBe(128 + 223 / 2 + DRUM_NUDGE_X);
-    expect(svgWheelLayout.center.y).toBe(328);
+    expect(svgWheelLayout.center.y).toBe(346);
     expect(svgWheelLayout.radii.x).toBeGreaterThan(120);
     expect(svgWheelLayout.radii.x).toBe(svgWheelLayout.radii.y);
     expect(svg).toContain('id="wheel-letter-clip"');
@@ -94,7 +94,8 @@ describe('svg wheel', () => {
     };
     punchWheelHole(rgba, keep);
     const hub = svgWheelLayout.center;
-    const hubI = (Math.floor(hub.y) * 640 + Math.floor(hub.x)) * 4 + 3;
+    const punchedY = Math.min(svgWheelLayout.clipY - 1, Math.floor(hub.y));
+    const hubI = (punchedY * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[hubI]).toBe(0);
     const letterRow = (0x14c * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[letterRow]).toBe(255);

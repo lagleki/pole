@@ -22,7 +22,7 @@ const { x: BOX_X, y: BOX_Y, width: BOX_W } = defaultRenderSpec.wheel.clearRect;
 const CLIP_Y = 0x14c;
 const HUB_X = BOX_X + BOX_W / 2 + DRUM_NUDGE_X;
 /** Shifted down vs the DOS cell center so a bigger disk tucks under the letters. */
-const HUB_Y = 328;
+const HUB_Y = 346;
 const R = 136;
 const PEG = 11;
 /** Punch only the disk (not the pegs) so bricks stay visible around the handles. */

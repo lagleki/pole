@@ -75,9 +75,9 @@ export const SEATS: readonly SeatSpec[] = [
 
 /** DIFF #26: studio layout vs the DOS cell so the TV drum does not cover plates. */
 export const DRUM_NUDGE_X = -8;
-/** 2-ой игрок: up and left so the nameplate clears the disk. */
+/** 2-ой игрок: left a little; sit lower so the plaque is not under the hub. */
 export const SEAT1_NUDGE_X = -4;
-export const SEAT1_NUDGE_Y = -72;
+export const SEAT1_NUDGE_Y = -24;
 /** 3-ий игрок sprite stays beside the drum; the plaque sits under the sprite. */
 export const SEAT2_NUDGE_X = 24;
 export const SEAT2_LABEL_NUDGE_X = 8;

@@ -623,6 +623,29 @@ class Game {
     return 0x13a * SCREEN_W + letterIdx * 20;
   }
 
+  /** Restore the 15×26 hand stamp from the alphabet BACKBUF strip. */
+  private eraseAlphabetHand(ofs: number): void {
+    this.screen.screenCopy(15, 26, ofs, BACKBUF + ofs);
+  }
+
+  /** Instantly blank a used alphabet cell (no linger under the finger). */
+  private clearAlphabetCell(letterIdx: number): void {
+    this.screen.fillRect(0x14c * SCREEN_W + letterIdx * 20, 18, 19, 7);
+  }
+
+  /** Hide the pointing hand and drop the chosen tile before the host reacts. */
+  private dismissAlphabetPick(letterIdx: number, handOfs: number, prevOfs?: number): void {
+    const hand = this.m.input.hand;
+    hand.step = 0;
+    this.eraseAlphabetHand(handOfs);
+    if (prevOfs !== undefined && prevOfs !== handOfs) {
+      this.eraseAlphabetHand(prevOfs);
+    }
+    // Whole alphabet strip from the pick-start snapshot, then drop this tile.
+    this.screen.screenCopy(SCREEN_W, 60, 0x59b0 * 8, BACKBUF + 0x59b0 * 8);
+    this.clearAlphabetCell(letterIdx);
+  }
+
   /** dpr:1410-1424 — lift the used letter off the alphabet row. */
   private async vanishAlphabetTile(letterIdx: number): Promise<void> {
     const s = this.screen;
@@ -674,17 +697,20 @@ class Game {
     const s = this.screen;
     const { input } = this.m;
     const seatIdx = this.curPlayer;
-    const { moneyOfs, spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
+    const { spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
+    const bubbleW = 84;
+    const bubbleH = 39;
+    const bubbleGap = 4;
+    const rightBubble = talkBubbleOfs + bubbleW + bubbleGap;
 
-    s.screenCopy(125, 30, BACKBUF2, moneyOfs - 30 * SCREEN_W - 24);
-    s.screenCopy(125, 30, BACKBUF2 + 125, moneyOfs - 24);
-    if (label1.length > 0) {
-      s.fillRect(moneyOfs - 644, 30, 84, 7);
-      s.drawSprite(SPRITE.SNIKERS, moneyOfs - 24, 2);
-      s.drawSprite(SPRITE.SNIKERS, moneyOfs + 40, 2);
-      s.print(label1, moneyOfs - 30 * SCREEN_W - 16, 0, 14, 8);
-      s.print(label2, moneyOfs - 16 * SCREEN_W - 16, 0, 14, 8);
-    }
+    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, BACKBUF2, talkBubbleOfs);
+    // WEB: two yellow player bubbles instead of the DOS Snickers wrappers.
+    const leftText = phrase0.length > 0 ? phrase0 : label1;
+    const rightText = phrase1.length > 0 ? phrase1 : label2;
+    s.drawSprite(SPRITE.SPEECH_BUBBLE2, talkBubbleOfs, 2);
+    s.print(leftText, talkBubbleOfs + 8 * SCREEN_W + 44 - (this.len(leftText) << 2), 0, 14, 8);
+    s.drawSprite(SPRITE.SPEECH_BUBBLE2, rightBubble, 2);
+    s.print(rightText, rightBubble + 8 * SCREEN_W + 44 - (this.len(rightText) << 2), 0, 14, 8);
 
     let result = 0;
     if (this.isHuman(seatIdx)) {
@@ -715,8 +741,7 @@ class Game {
       result = forced ?? this.random(2);
     }
 
-    s.screenCopy(125, 30, moneyOfs - 30 * SCREEN_W - 24, BACKBUF2);
-    s.screenCopy(125, 30, moneyOfs - 24, BACKBUF2 + 125);
+    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, talkBubbleOfs, BACKBUF2);
     await this.yakubovichSetSilent();
     // DOS: deviation #10 — the human player did not speak.
     if (!this.isHuman(seatIdx)) {
@@ -1241,14 +1266,13 @@ class Game {
           if (this.available[i] === 0x20) {
             await this.m.audio.sound(1000, 32);
           } else {
-            break;
+            this.dismissAlphabetPick(i, hand.ofs, hand.prev);
+            return i;
           }
         }
         // WEB: yield (original busy-loop).
         await this.delay(10);
       }
-      hand.step = 0;
-      return i;
     }
 
     // dpr:1389-1396 — the original NPC heuristic. Point at the tile; speech is in openLetter.
@@ -1262,10 +1286,8 @@ class Game {
         i = this.random(32);
       } while (this.available[i] === 0x20);
     }
-    const hand = this.m.input.hand;
-    hand.step = 0;
-    hand.ofs = this.alphabetHandOfs(i);
-    s.drawSprite(SPRITE.HAND, hand.ofs, 2);
+    this.m.input.hand.step = 0;
+    this.clearAlphabetCell(i);
     return i;
   }
 
@@ -1287,18 +1309,11 @@ class Game {
     this.available[letterIdx] = 0x20;
     this.syncDebug();
 
-    // WEB: point + «Буква N» together; wait for both before the host reacts.
     this.m.input.hand.step = 0;
-    if (n === 0) {
-      const handOfs = this.alphabetHandOfs(letterIdx);
-      this.m.input.hand.ofs = handOfs;
-      s.drawSprite(SPRITE.HAND, handOfs, 2);
-    }
+    this.eraseAlphabetHand(this.alphabetHandOfs(letterIdx));
+    this.clearAlphabetCell(letterIdx);
     const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
     await this.finishLetterAnnouncement(letterSpeech);
-    if (n === 0) {
-      s.screenCopy(20, 26, this.alphabetHandOfs(letterIdx), BACKBUF + this.alphabetHandOfs(letterIdx));
-    }
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).
