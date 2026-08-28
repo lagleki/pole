@@ -1013,9 +1013,9 @@ class Game {
     }
 
     await this.yakubovichSetSilent();
-    this.setSfxVolume('playersEnter', PLAYERS_ENTER_UNDER_HOST);
     await this.yakubovichTalk('И вот задание', 'на этот тур.');
     await this.yakubovichSetSilent();
+    this.setSfxVolume('playersEnter', PLAYERS_ENTER_UNDER_HOST);
     await this.yakubovichTalk(question.theme, '');
     await this.waitKey(INFINITE);
     await this.yakubovichSetSilent();
