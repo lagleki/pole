@@ -36,6 +36,21 @@ import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHE
 const SPRITE = defaultAssetSpec.spriteIds;
 const MALE_A_YA_NAMES = new Set(['илья', 'никита', 'савва', 'фома', 'кузьма', 'лука']);
 
+/** Maps a single Cyrillic letter (А–Я) to its spoken name for TTS. */
+const LETTER_NAMES: Record<string, string> = {
+  'А': 'А', 'Б': 'Бэ', 'В': 'Вэ', 'Г': 'Гэ', 'Д': 'Дэ',
+  'Е': 'Е', 'Ж': 'Жэ', 'З': 'Зэ', 'И': 'И', 'Й': 'И краткое',
+  'К': 'Ка', 'Л': 'Эль', 'М': 'Эм. Михаил', 'Н': 'Эн. Николай', 'О': 'О. Олег',
+  'П': 'Пэ', 'Р': 'Эр', 'С': 'Эс', 'Т': 'Тэ', 'У': 'У',
+  'Ф': 'Эф', 'Х': 'Ха', 'Ц': 'Цэ', 'Ч': 'Чэ', 'Ш': 'Ша',
+  'Щ': 'Ща', 'Ъ': 'Твёрдый знак', 'Ы': 'Ы', 'Ь': 'Мягкий знак',
+  'Э': 'Э', 'Ю': 'Ю', 'Я': 'Я',
+};
+
+function letterName(ch: string): string {
+  return LETTER_NAMES[ch] ?? ch;
+}
+
 export function playerVoiceRole(spriteId: number | null, name: string, human: boolean): TtsRole {
   if (spriteId !== null && FEMALE_CHARACTER_SPRITES.has(spriteId)) {
     return 'female';
@@ -591,8 +606,7 @@ class Game {
 
   /** DIFF #21: every seat names the letter aloud; NPC still gets the bubble. */
   private speakLetterChoice(letterChar: string, n: number): HostSpeech | null {
-    const text = n === 0 ? `Буква ${letterChar}` : `${n}-я буква`;
-    const spoken = spokenCasing(text);
+    const spoken = n === 0 ? `Буква ${letterName(letterChar)}` : spokenCasing(`${n}-я буква`);
     return this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
   }
 
@@ -1174,7 +1188,8 @@ class Game {
     const match = typed.length === this.guessedWord.length && typed.every((b, idx) => b === this.guessedWord[idx]);
     if (match) {
       this.playSfx('wordCorrect');
-      await this.yakubovichReply('Вы совершенно', 'правы!!');
+      const word = decodeCp866(this.guessedWord);
+      await this.yakubovichReply(word + '.', 'Ну конечно!');
       await this.waitKey(2500);
       await this.yakubovichSetSilent();
       return 'won';
@@ -1370,12 +1385,12 @@ class Game {
 
     if (k === 0) {
       this.playSfx('letterWrong');
-      await this.yakubovichReply('Нет в этом слове такой буквы!', 'Переход хода..');
+      await this.yakubovichReply('Увы, такой буквы нет!', '');
       return false;
     }
 
     if (n === 0) {
-      await this.yakubovichTalk('Есть такая буква!', 'Браво!!');
+      await this.yakubovichTalk('И в этом слове есть такая буква!', 'Откройте!');
     }
     s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
 
