@@ -96,11 +96,13 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     then ResponsiveVoice. Probe logs go to the console as `[pole-tts]`.
     Playwright (`navigator.webdriver`) skips audible TTS.
 22. **Tour prompts from CHGK Jeopardy.** Gameplay no longer uses POLE.OVL
-    category+word pairs. The live bank is a 686-question filter of the public
+    category+word pairs. The live bank is a 684-question filter of the public
     Russian QA Jeopardy dataset (База вопросов ЧГК, http://db.chgk.info):
-    one А–Я word as the board answer, the original question text spoken by
-    the host after «И вот задание на этот тур». Non-commercial license;
-    texts are unmodified; `LICENSE-CHGK.txt` ships next to the pack.
+    one А–Я word as the board answer, with answers normalized to nominative
+    singular where applicable. Names, titles, denominations, and pluralia
+    tantum are retained; question text is lightly edited to agree with the
+    answer form and is spoken by the host after «И вот задание на этот тур».
+    Non-commercial license; `LICENSE-CHGK.txt` ships next to the pack.
     POLE.OVL.json remains for byte-exact asset rebuilds.
 23. **Assistant walks to the board cell's vertical center.** The original
     stops at the cell's left-edge offset (ASSIST_STAY is 25px, cells are 16px)
