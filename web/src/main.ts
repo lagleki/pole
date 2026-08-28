@@ -270,7 +270,7 @@ function setSoundEnabled(value: boolean): void {
   if (value) {
     audioOutput.unlock().catch(() => {});
     hostTts.prime();
-    gameSfx.prime();
+    void gameSfx.prime();
   } else {
     hostTts.cancel();
     gameSfx.stop();
@@ -488,20 +488,21 @@ function unlockAudio(): void {
     // Autoplay policy may reject before the first gesture; harmless.
   });
   hostTts.prime();
-  gameSfx.prime();
+  void gameSfx.prime();
 }
 
 function skipAudioGate(): boolean {
   return Boolean(typeof navigator !== 'undefined' && navigator.webdriver) || speedFactor !== 1;
 }
 
-function waitForAudioGesture(): Promise<void> {
+async function waitForAudioGesture(): Promise<void> {
   if (skipAudioGate()) {
     unlockAudio();
-    return Promise.resolve();
+    await gameSfx.prime();
+    return;
   }
   audioGate.hidden = false;
-  return new Promise((resolve) => {
+  await new Promise<void>((resolve) => {
     let done = false;
     const go = (): void => {
       if (done) {
@@ -515,6 +516,7 @@ function waitForAudioGesture(): Promise<void> {
     audioGate.addEventListener('pointerdown', go);
     audioGate.addEventListener('click', go);
   });
+  await gameSfx.prime();
 }
 
 function toggleFullscreen(): void {

@@ -57,7 +57,8 @@ export interface GameSfx {
   play(id: SfxId, options?: SfxPlayOptions): void;
   stop(id?: SfxId): void;
   setVolume(id: SfxId, volume: number): void;
-  prime(): void;
+  /** Unlock HTMLAudio on a user gesture. Safe to call again; does not pause playing cues. */
+  prime(): Promise<void>;
 }
 
 function isWebDriver(): boolean {
@@ -86,6 +87,8 @@ const SFX_IDS = Object.keys(SFX_FILES) as SfxId[];
 export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
   const players = new Map<SfxId, HTMLAudioElement>();
   const pending = new Map<SfxId, SfxPlayOptions>();
+  let primed = false;
+  let priming: Promise<void> | null = null;
 
   const element = (id: SfxId): HTMLAudioElement | null => {
     if (typeof Audio === 'undefined') {
@@ -125,12 +128,30 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
     }
   };
 
+  const flushPending = (): void => {
+    const queued = [...pending.entries()];
+    pending.clear();
+    for (const [id, playOptions] of queued) {
+      if (options.getEnabled()) {
+        start(id, playOptions);
+      }
+    }
+  };
+
   return {
-    prime(): void {
+    prime(): Promise<void> {
+      if (primed) {
+        return Promise.resolve();
+      }
+      if (priming) {
+        return priming;
+      }
       if (typeof Audio === 'undefined' || isWebDriver()) {
-        return;
+        primed = true;
+        return Promise.resolve();
       }
       // Android Chrome unlocks each HTMLAudioElement only after play() in a gesture.
+      // Do this mute-play-pause once: repeating it stops the splash theme.
       const unlocks = SFX_IDS.map((id) => {
         const player = element(id);
         if (!player) {
@@ -156,19 +177,20 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
             player.muted = false;
           });
       });
-      void Promise.all(unlocks).then(() => {
-        const queued = [...pending.entries()];
-        pending.clear();
-        for (const [id, playOptions] of queued) {
-          if (options.getEnabled()) {
-            start(id, playOptions);
-          }
-        }
+      priming = Promise.all(unlocks).then(() => {
+        primed = true;
+        priming = null;
+        flushPending();
       });
+      return priming;
     },
 
     play(id: SfxId, playOptions: SfxPlayOptions = {}): void {
       if (!options.getEnabled() || isWebDriver()) {
+        return;
+      }
+      if (!primed) {
+        pending.set(id, playOptions);
         return;
       }
       pending.delete(id);
