@@ -148,3 +148,6 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     Поле чудес!», then — over the «выход участников» bed — «под аплодисменты
     зрительного зала, я рад представить вам тройку игроков!». Later tours use
     «И вновь в эфире…» plus a new triple; финал / суперфинал are named.
+28. **No key wait after the tour prompt.** After the host speaks the round’s
+    задание, play continues into the first spin without waiting for Space.
+29. **Шкатулка pays 1000.** Guessing the box with money adds 1000, not the DOS 100.

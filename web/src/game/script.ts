@@ -420,9 +420,11 @@ class Game {
     const s = this.screen;
     for (let i = this.guessedWord.length - 1; i >= 0; i -= 1) {
       const cell = (i << 4) + this.wordPos + 11 * SCREEN_W;
-      s.fillRect(cell, 19, 14, 8);
       if (this.opened[i]) {
+        s.fillRect(cell, 19, 15, 7);
         s.print(decodeCp866(this.guessedWord.subarray(i, i + 1)), cell + 4 + 2 * SCREEN_W, 0, 14, 8);
+      } else {
+        s.fillRect(cell, 19, 14, 8);
       }
     }
   }
@@ -469,6 +471,7 @@ class Game {
     this.paintWordBoard();
     this.paintSeats();
     this.drawFortuneWheel(this.curSector);
+    this.screen.screenCopy(SCREEN_W, 120, BACKBUF, 0);
     this.setScene('turn');
   }
 
@@ -628,8 +631,21 @@ class Game {
     this.screen.screenCopy(15, 26, ofs, BACKBUF + ofs);
   }
 
+  /**
+   * The pick hand sits at 0x13a (26px), the tile at 0x14c (18px). Clearing the
+   * tile leaves the upper 18px of the finger on the alphabet row. Copy that
+   * overhang from the neighbouring cell so BACKBUF (often a plus-pick snapshot
+   * of the word board) cannot stamp a finger ghost.
+   */
+  private wipeAlphabetFinger(letterIdx: number): void {
+    const ofs = this.alphabetHandOfs(letterIdx);
+    const neighbor = letterIdx < 31 ? ofs + 20 : ofs - 20;
+    this.screen.screenCopy(15, 18, ofs, neighbor);
+  }
+
   /** Instantly blank a used alphabet cell (no linger under the finger). */
   private clearAlphabetCell(letterIdx: number): void {
+    this.wipeAlphabetFinger(letterIdx);
     this.screen.fillRect(0x14c * SCREEN_W + letterIdx * 20, 18, 19, 7);
   }
 
@@ -701,14 +717,17 @@ class Game {
     const bubbleW = 84;
     const bubbleH = 39;
     const bubbleGap = 4;
-    const rightBubble = talkBubbleOfs + bubbleW + bubbleGap;
+    // Seat 1: the 99×83 pose blit covers the left cloud’s tail and leaves the
+    // right one intact, so the pair looks vertically skewed. Sit both above the sprite.
+    const pairOfs = seatIdx === 1 ? talkBubbleOfs - 20 * SCREEN_W : talkBubbleOfs;
+    const rightBubble = pairOfs + bubbleW + bubbleGap;
 
-    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, BACKBUF2, talkBubbleOfs);
+    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, BACKBUF2, pairOfs);
     // WEB: two yellow player bubbles instead of the DOS Snickers wrappers.
     const leftText = phrase0.length > 0 ? phrase0 : label1;
     const rightText = phrase1.length > 0 ? phrase1 : label2;
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, talkBubbleOfs, 2);
-    s.print(leftText, talkBubbleOfs + 8 * SCREEN_W + 44 - (this.len(leftText) << 2), 0, 14, 8);
+    s.drawSprite(SPRITE.SPEECH_BUBBLE2, pairOfs, 2);
+    s.print(leftText, pairOfs + 8 * SCREEN_W + 44 - (this.len(leftText) << 2), 0, 14, 8);
     s.drawSprite(SPRITE.SPEECH_BUBBLE2, rightBubble, 2);
     s.print(rightText, rightBubble + 8 * SCREEN_W + 44 - (this.len(rightText) << 2), 0, 14, 8);
 
@@ -741,7 +760,7 @@ class Game {
       result = forced ?? this.random(2);
     }
 
-    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, talkBubbleOfs, BACKBUF2);
+    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, pairOfs, BACKBUF2);
     await this.yakubovichSetSilent();
     // DOS: deviation #10 — the human player did not speak.
     if (!this.isHuman(seatIdx)) {
@@ -1042,7 +1061,7 @@ class Game {
     await this.yakubovichSetSilent();
     this.setSfxVolume('playersEnter', PLAYERS_ENTER_UNDER_HOST);
     await this.yakubovichTalk(question.theme, '');
-    await this.waitKey(INFINITE);
+    // DIFF #28: DOS waited for Space here; continue into the first spin.
     await this.yakubovichSetSilent();
     this.syncDebug();
   }
@@ -1105,9 +1124,10 @@ class Game {
     s.drawSprite(SPRITE.BOX_MONEY, talkBubbleOfs - 60 * SCREEN_W - 30 + 56 * k, 7);
     if (choice === k) {
       this.playSfx('boxMoney');
-      await this.yakubovichReply('Браво!!!', 'Вы отгадали!');
+    await this.yakubovichReply('Браво!!!', 'Вы отгадали!');
       const before = seat.score;
-      seat.score += 100;
+      // DIFF #29: TV-scale purse; DOS awarded 100.
+      seat.score += 1000;
       await this.waitKey(INFINITE);
       await this.yakubovichSetSilent();
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
@@ -1310,7 +1330,6 @@ class Game {
     this.syncDebug();
 
     this.m.input.hand.step = 0;
-    this.eraseAlphabetHand(this.alphabetHandOfs(letterIdx));
     this.clearAlphabetCell(letterIdx);
     const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
     await this.finishLetterAnnouncement(letterSpeech);
@@ -1370,7 +1389,7 @@ class Game {
         s.screenCopy(15, 19, f - BACKBUF, f);
         s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
         this.playSfx('letterCorrect');
-        await this.waitKey(150);
+        await this.waitKey(700);
       } else {
         const nextStep = stepDelta[(i3 + 1) & 3];
         if (k > 0 && walk + nextStep >= assistPos[k]) {

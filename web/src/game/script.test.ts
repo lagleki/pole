@@ -87,7 +87,15 @@ async function driveFullGame(h: Harness, maxRounds = 6000, until?: () => boolean
   );
 
   for (let round = 0; round < maxRounds; round += 1) {
-    await h.clock.runAll(5_000_000);
+    if (until) {
+      // Small steps so `until` can fire during a scene that no longer parks
+      // on an INFINITE key wait (e.g. word-select after the tour prompt).
+      if (h.clock.pendingCount > 0) {
+        await h.clock.advance(50);
+      }
+    } else {
+      await h.clock.runAll(5_000_000);
+    }
     await flush();
     if (finished || until?.()) {
       break;
@@ -195,8 +203,7 @@ describe('full game script (headless, virtual time, real assets)', () => {
 
   it('1-player mode (web default): empty name keeps seat 1 human as «ИГРОК», others are NPCs', async () => {
     const h = buildHarness(5, 1);
-    // Stop right after the first presentation completes (theme announce parks
-    // in word-select, before any human turn could block the driver).
+    // Stop while the host still speaks the tour prompt (before the first spin).
     await driveFullGame(h, 6000, () => h.ctx.state.scene === 'word-select');
 
     const seats = h.ctx.state.seats;
