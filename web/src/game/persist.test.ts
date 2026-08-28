@@ -11,6 +11,7 @@ import {
   saveProgress,
   type GameProgressSave,
 } from './persist';
+import { DRUM_NUDGE_X } from './constants';
 import { buildPegsSvg, buildWheelSvg, punchWheelHole, svgWheelLayout } from './svgWheel';
 import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, wheelSectorLabel } from './tvWheel';
 
@@ -66,9 +67,10 @@ describe('svg wheel', () => {
     expect(svg).toContain('>П</text>');
     expect(svg).toContain('>Б</text>');
     expect(svg).toContain('>1000</text>');
+    expect(svg).toContain('font-size="18"');
     expect(svg).not.toContain('ПРИЗ');
     expect(svgWheelLayout.box).toEqual({ x: 128, y: 154, width: 223, height: 172 });
-    expect(svgWheelLayout.center.x).toBe(128 + 223 / 2);
+    expect(svgWheelLayout.center.x).toBe(128 + 223 / 2 + DRUM_NUDGE_X);
     expect(svgWheelLayout.center.y).toBe(328);
     expect(svgWheelLayout.radii.x).toBeGreaterThan(120);
     expect(svgWheelLayout.radii.x).toBe(svgWheelLayout.radii.y);

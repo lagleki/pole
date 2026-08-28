@@ -72,7 +72,7 @@ export class PwmAudio implements AudioApi {
   /**
    * When false, `sound()` / `playWav()` still delay (and consume RNG via
    * callers) but do not emit PWM — TV samples replace them (DIFF #25),
-   * unless the call passes `{ audible: true }` (assistant walk).
+   * unless the call passes `{ audible: true }` (assistant walk, box shuffle).
    */
   playPwm = true;
 

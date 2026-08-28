@@ -105,7 +105,6 @@ app.innerHTML = `
 
       <p class="hint keys-hint">ПРОБЕЛ / клик — подтвердить и пропустить паузы · ←/→ — рука ·
         ENTER — ввод имени/слова · буквы — набор текста · Ctrl+S — звук (голос ведущего и эффекты) · TAB — выключить звук · ESC — новая игра</p>
-      <pre id="game-status" class="statusline">Загрузка ресурсов...</pre>
     </section>
 
     <section id="admin-view" class="admin-view is-hidden">
@@ -174,7 +173,6 @@ const adminView = requireElement<HTMLElement>('#admin-view');
 const restartBtn = requireElement<HTMLButtonElement>('#restart-btn');
 const soundToggleBtn = requireElement<HTMLButtonElement>('#sound-toggle');
 const fullscreenBtn = requireElement<HTMLButtonElement>('#fullscreen-btn');
-const gameStatus = requireElement<HTMLPreElement>('#game-status');
 const loadDefaultBtn = requireElement<HTMLButtonElement>('#load-default');
 const downloadOvlBtn = requireElement<HTMLButtonElement>('#download-ovl');
 const addQuestionBtn = requireElement<HTMLButtonElement>('#add-question');
@@ -377,7 +375,6 @@ function sleep(ms: number): Promise<void> {
 async function gameLoop(): Promise<void> {
   for (;;) {
     while (sessionQuestions.length === 0) {
-      gameStatus.textContent = 'Нет вопросов — загрузите банк JSON в админ-панели.';
       await sleep(500);
     }
     runCounter += 1;
@@ -450,9 +447,6 @@ async function gameLoop(): Promise<void> {
       }
       sessionTopPlayers.length = 0;
       sessionTopPlayers.push(...resume.topPlayers.map((row) => ({ ...row })));
-      gameStatus.textContent = `Продолжение игры (этап ${resume.stage + 1}/8). Seed сохранён. Скорость: x${speedFactor}.`;
-    } else {
-      gameStatus.textContent = `Запуск №${runCounter}. Seed: ${Number.isNaN(seedParam) ? 'случайный' : seedParam}. Скорость: x${speedFactor}.`;
     }
 
     try {
@@ -470,15 +464,10 @@ async function gameLoop(): Promise<void> {
         tts: hostTts,
         sfx: gameSfx,
       });
-      gameStatus.textContent = 'Игра завершена. Перезапуск...';
     } catch (error) {
       if (!signal.aborted) {
-        const message = error instanceof Error ? error.message : String(error);
-        gameStatus.textContent = `Ошибка игры: ${message} — перезапуск через 2 с.`;
         console.error(error);
         await sleep(1700);
-      } else {
-        gameStatus.textContent = 'Перезапуск...';
       }
     } finally {
       hostTts.cancel();
@@ -737,7 +726,6 @@ for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="pla
     if (mode !== humanSeats) {
       humanSeats = mode;
       persistUiPrefs();
-      gameStatus.textContent = `Режим: ${mode === 1 ? '1 игрок + 2 НПС' : '2 игрока'}. Новая игра...`;
       discardRunAndProgress('mode-change');
     }
   });
@@ -993,5 +981,4 @@ setActiveTab('play');
 loadBundledAssets().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   statusEl.textContent = `Load error: ${message}`;
-  gameStatus.textContent = `Ошибка загрузки ресурсов: ${message}`;
 });

@@ -19,6 +19,7 @@ import {
 } from './constants';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import type { WheelView } from './svgWheel';
+import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
 
 /**
@@ -618,6 +619,29 @@ class Game {
     }
   }
 
+  private alphabetHandOfs(letterIdx: number): number {
+    return 0x13a * SCREEN_W + letterIdx * 20;
+  }
+
+  /** dpr:1410-1424 — lift the used letter off the alphabet row. */
+  private async vanishAlphabetTile(letterIdx: number): Promise<void> {
+    const s = this.screen;
+    const cell = 0x14c * SCREEN_W + letterIdx * 20;
+    for (let i = 0; i <= 3; i += 1) {
+      if (i < 3) {
+        s.drawSprite(SPRITE.LETTER_BACK1 + i, cell, 16);
+      } else {
+        s.fillRect(cell, 18, 19, 7);
+      }
+      let k = 0;
+      for (let j = 1; j <= 10; j += 1) {
+        k = this.m.audio.pwm(this.audioBuf, k, i * 0x64 + j * 10 + 0x32, 1);
+        k = this.m.audio.pwm(this.audioBuf, k, 0, Math.floor(j / 5) + (i << 2));
+      }
+      await this.m.audio.playWav(this.audioBuf.subarray(0, k));
+    }
+  }
+
   /** dpr:560-587. Skip the coin pile when the score did not go up. */
   private async updateMoney(seatIdx: number, fromScore: number): Promise<void> {
     const seat = this.seats[seatIdx];
@@ -867,10 +891,25 @@ class Game {
     this.seats[0].spriteId = null; // dpr:1034 — avoid drawing seat 0 before presentation
     this.drawFortuneWheel(this.curSector);
     this.seats[0].spriteId = saved;
-    await this.yakubovichTalk('Представляю', 'участников!');
     this.stopSfx('opening');
     this.stopSfx('openingOld');
     this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME });
+    // WEB DIFF #27: TV studio open (Wikiquote catchphrase + calendar weekday).
+    if (this.stage === 0) {
+      for (const line of firstTourGreeting(broadcastWeekday())) {
+        await this.yakubovichTalk(line[0], line[1]);
+      }
+    } else {
+      const line = laterTourGreeting(this.stage);
+      await this.yakubovichTalk(line[0], line[1]);
+    }
+    if (this.stage === 0) {
+      const invite = firstTourInvite();
+      await this.yakubovichTalk(invite[0], invite[1]);
+    } else {
+      const invite = laterTourInvite(this.stage);
+      await this.yakubovichTalk(invite[0], invite[1]);
+    }
   }
 
   /** dpr:1040-1087 */
@@ -997,7 +1036,7 @@ class Game {
     let k = 61;
     let j = talkBubbleOfs + 60 * SCREEN_W;
     for (let i = 30; i >= 0; i -= 1) {
-      await this.m.audio.sound(1000 - i * 20, 10);
+      await this.m.audio.sound(1000 - i * 20, 10, { audible: true });
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W - 32, 7);
       s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W + 24, 7);
@@ -1010,16 +1049,16 @@ class Game {
     await this.waitKey(5000);
 
     s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-    await this.m.audio.sound(1000, 10);
+    await this.m.audio.sound(1000, 10, { audible: true });
     s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
-    await this.m.audio.sound(100, 10);
+    await this.m.audio.sound(100, 10, { audible: true });
     s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
-    await this.m.audio.sound(500, 10);
+    await this.m.audio.sound(500, 10, { audible: true });
     await this.waitKey(2000);
 
     k = this.random(20) + 10;
     for (let i = k; i >= 0; i -= 1) {
-      await this.m.audio.sound(this.random(100) + 50, 10);
+      await this.m.audio.sound(this.random(100) + 50, 10, { audible: true });
       await this.delay(50);
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       if ((i & 1) === 0) {
@@ -1113,7 +1152,6 @@ class Game {
     const startDeg = -this.curSector * WHEEL_STEP_DEG;
     const deltaDeg = -totalSteps * WHEEL_STEP_DEG;
     this.playSfx('drumSpin', { loop: true });
-    this.stopSfx('spinPleaseMusic');
     this.ctx.wheel?.setVisible(true);
     let elapsed = 0;
     while (elapsed < durationMs) {
@@ -1209,23 +1247,25 @@ class Game {
         // WEB: yield (original busy-loop).
         await this.delay(10);
       }
-      s.screenCopy(20, 26, hand.ofs, BACKBUF + hand.ofs);
       hand.step = 0;
       return i;
     }
 
-    // dpr:1389-1396 — the original NPC heuristic.
+    // dpr:1389-1396 — the original NPC heuristic. Point at the tile; speech is in openLetter.
+    let i: number;
     if (this.remaindLetters << 1 < this.guessedWord.length && this.random(this.stage + 2) > 0) {
-      let i: number;
       do {
         i = this.guessedWord[this.random(this.guessedWord.length)] - 0x80;
       } while (this.available[i] === 0x20);
-      return i;
+    } else {
+      do {
+        i = this.random(32);
+      } while (this.available[i] === 0x20);
     }
-    let i: number;
-    do {
-      i = this.random(32);
-    } while (this.available[i] === 0x20);
+    const hand = this.m.input.hand;
+    hand.step = 0;
+    hand.ofs = this.alphabetHandOfs(i);
+    s.drawSprite(SPRITE.HAND, hand.ofs, 2);
     return i;
   }
 
@@ -1242,32 +1282,23 @@ class Game {
     this.setScene('letter-open');
     const s = this.screen;
     const seat = this.seats[this.curPlayer];
-    // WEB: hide the finger and lift the alphabet tile on click, then score.
-    this.m.input.hand.step = 0;
-    s.screenCopy(20, 26, this.m.input.hand.ofs, BACKBUF + this.m.input.hand.ofs);
-
     const letterByte = this.available[letterIdx];
     const letterChar = decodeCp866(new Uint8Array([letterByte]));
     this.available[letterIdx] = 0x20;
     this.syncDebug();
-    const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
 
-    // Letter disappear effect on the alphabet row (dpr:1410-1424), immediately.
-    const cell = 0x14c * SCREEN_W + letterIdx * 20;
-    for (let i = 0; i <= 3; i += 1) {
-      if (i < 3) {
-        s.drawSprite(SPRITE.LETTER_BACK1 + i, cell, 16);
-      } else {
-        s.fillRect(cell, 18, 19, 7);
-      }
-      let k = 0;
-      for (let j = 1; j <= 10; j += 1) {
-        k = this.m.audio.pwm(this.audioBuf, k, i * 0x64 + j * 10 + 0x32, 1);
-        k = this.m.audio.pwm(this.audioBuf, k, 0, Math.floor(j / 5) + (i << 2));
-      }
-      await this.m.audio.playWav(this.audioBuf.subarray(0, k));
+    // WEB: point + «Буква N» together; wait for both before the host reacts.
+    this.m.input.hand.step = 0;
+    if (n === 0) {
+      const handOfs = this.alphabetHandOfs(letterIdx);
+      this.m.input.hand.ofs = handOfs;
+      s.drawSprite(SPRITE.HAND, handOfs, 2);
     }
+    const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
     await this.finishLetterAnnouncement(letterSpeech);
+    if (n === 0) {
+      s.screenCopy(20, 26, this.alphabetHandOfs(letterIdx), BACKBUF + this.alphabetHandOfs(letterIdx));
+    }
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).
@@ -1293,15 +1324,17 @@ class Game {
     if (k === 0) {
       this.playSfx('letterWrong');
       await this.yakubovichReply('Нет в этом слове такой буквы!', 'Переход хода..');
+      await this.vanishAlphabetTile(letterIdx);
       return false;
     }
 
     if (n === 0) {
-      void this.yakubovichTalk('Есть такая буква!', 'Браво!!');
+      await this.yakubovichTalk('Есть такая буква!', 'Браво!!');
     }
+    await this.vanishAlphabetTile(letterIdx);
     s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
 
-    // WEB: beat after «Буква N» before the assistant leaves the wings.
+    // WEB: beat after the host confirms, then the assistant leaves the wings.
     await this.delay(1000);
 
     // Assistant walk (dpr:1456-1480). WEB: card sting after each flip.
@@ -1435,12 +1468,14 @@ class Game {
     }
 
     await this.yakubovichTalk(this.playerName(this.curPlayer), 'Вращайте барабан!');
-    if (human && (await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Слово!', 'Поехали!')) === 0) {
-      const result = await this.tellWord();
-      return result === 'won' ? 'won' : 'next';
+    if (human) {
+      if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Слово!', 'Поехали!')) === 0) {
+        const result = await this.tellWord();
+        return result === 'won' ? 'won' : 'next';
+      }
     }
 
-    this.yakubovichSetSilent();
+    await this.yakubovichSetSilent();
     await this.spinWheel();
 
     const landed = WHEEL_SECTORS[this.curSector];

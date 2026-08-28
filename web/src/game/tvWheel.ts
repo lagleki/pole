@@ -21,7 +21,7 @@ const P = (value: number): TvSector => ({ kind: 'points', value });
 
 /**
  * Clockwise from the arrow (index 0). 28 point sectors and 8 specials:
- * bankrupt×1 (Б), prize×2 (П), plus×2, x2×2, zero×1. No key/chance.
+ * bankrupt×1 (Б), prize×1 (П), plus×1, x2×2, zero×3. No key/chance.
  * Same point value never sits on two neighbouring wedges (including wrap).
  */
 export const WHEEL_SECTORS: readonly TvSector[] = [
@@ -45,7 +45,7 @@ export const WHEEL_SECTORS: readonly TvSector[] = [
   P(700),
   P(500),
   P(350),
-  { kind: 'prize' },
+  { kind: 'zero' },
   P(800),
   P(650),
   P(750),
@@ -57,7 +57,7 @@ export const WHEEL_SECTORS: readonly TvSector[] = [
   P(700),
   P(850),
   P(600),
-  { kind: 'plus' },
+  { kind: 'zero' },
   P(950),
   P(700),
   P(750),
@@ -78,6 +78,19 @@ export function wheelSectorLabel(sector: TvSector): string {
     case 'zero':
       return '0';
   }
+}
+
+export function wheelSectorLabelFontSize(label: string): number {
+  if (label.length === 1) {
+    return 18;
+  }
+  if (label.length >= 4) {
+    return 8;
+  }
+  if (/^\d{3}$/.test(label)) {
+    return 9;
+  }
+  return 13;
 }
 
 /**

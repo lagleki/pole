@@ -73,22 +73,42 @@ export const SEATS: readonly SeatSpec[] = [
   },
 ];
 
-/** DIFF #26: shift the right-hand seat so the plaque sits beside the drum. */
+/** DIFF #26: studio layout vs the DOS cell so the TV drum does not cover plates. */
+export const DRUM_NUDGE_X = -8;
+/** 2-ой игрок: up and left so the nameplate clears the disk. */
+export const SEAT1_NUDGE_X = -4;
+export const SEAT1_NUDGE_Y = -72;
+/** 3-ий игрок sprite stays beside the drum; the plaque sits under the sprite. */
 export const SEAT2_NUDGE_X = 24;
+export const SEAT2_LABEL_NUDGE_X = 8;
+
+const SCREEN_W = 640;
+
+function nudgeOfs(ofs: number, dx: number, dy: number): number {
+  return ofs + dy * SCREEN_W + dx;
+}
 
 export function liveSeat(index: number): SeatSpec {
   const seat = SEATS[index];
-  if (index !== 2) {
-    return seat;
+  if (index === 1) {
+    return {
+      ...seat,
+      spriteOfs: nudgeOfs(seat.spriteOfs, SEAT1_NUDGE_X, SEAT1_NUDGE_Y),
+      talkBubbleOfs: nudgeOfs(seat.talkBubbleOfs, SEAT1_NUDGE_X, SEAT1_NUDGE_Y),
+      labelOfs: nudgeOfs(seat.labelOfs, SEAT1_NUDGE_X, SEAT1_NUDGE_Y),
+      moneyOfs: nudgeOfs(seat.moneyOfs, SEAT1_NUDGE_X, SEAT1_NUDGE_Y),
+    };
   }
-  const dx = SEAT2_NUDGE_X;
-  return {
-    ...seat,
-    spriteOfs: seat.spriteOfs + dx,
-    talkBubbleOfs: seat.talkBubbleOfs + dx,
-    labelOfs: seat.labelOfs + dx,
-    moneyOfs: seat.moneyOfs + dx,
-  };
+  if (index === 2) {
+    return {
+      ...seat,
+      spriteOfs: nudgeOfs(seat.spriteOfs, SEAT2_NUDGE_X, 0),
+      talkBubbleOfs: nudgeOfs(seat.talkBubbleOfs, SEAT2_NUDGE_X, 0),
+      moneyOfs: nudgeOfs(seat.moneyOfs, SEAT2_NUDGE_X, 0),
+      labelOfs: nudgeOfs(seat.labelOfs, SEAT2_LABEL_NUDGE_X, 0),
+    };
+  }
+  return seat;
 }
 
 /** MainThread PlayerNames — round announcement names (dpr:797). */

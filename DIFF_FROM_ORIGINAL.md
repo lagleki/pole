@@ -115,7 +115,8 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     letter/word stings play as mp3s from the «Поле чудес» clip pack
     (zvukipro.com; files in `web/public/assets/sfx/`).     PWM still runs for
     delay and RNG timing; the browser mutes the square wave except the
-    assistant’s walk to the board and the money-stack recount ticks
+    assistant’s walk to the board, the шкатулки bring-in / lid / shuffle ticks,
+    and the money-stack recount ticks
     (original PC-speaker). Recount animation is at most 1 s below 10 000
     and 3 s above (drum values are 350+). No pile animation when the
     score did not increase. After the splash theme, «выход участников» plays as a quiet
@@ -123,7 +124,7 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     (DIFF #21) is unchanged. Playwright skips audible samples.
 26. **Classic 36-sector TV drum.** Live play no longer uses the DOS 16 wedges
     / 32 half-steps.     The SVG wheel has 36 sectors: point values 350–1000
-    plus one Банкрот (Б), Приз (П)×2, Плюс×2, ×2×2 and one Ноль. No Ключ or Шанс. A correct
+    plus one Банкрот (Б), one Приз (П), one Плюс, ×2×2 and several Ноль. No Ключ or Шанс. A correct
     letter on a point sector adds value × number of hits. ×2 doubles the
     score if the letter is present. Neighbouring wedges never share the same
     point value. The SVG rotates opposite the sector index so the arrow, the
@@ -135,4 +136,13 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
     The canvas sits above the SVG with a circular hole so the drum tucks
     under the letters (players and name plates stay behind the disk) while
-    the letter-pick hand stays on top. Seat 2 is shifted 24 px right.
+    the letter-pick hand stays on top. The hub is 8 px left of the DOS cell
+    center. Seat 1 (2-ой игрок) is 4 px left and 72 px up; seat 2’s sprite
+    stays 24 px right, its nameplate 8 px right so it sits under the sprite.
+27. **Studio entrance greeting.** Entering the hall no longer uses the DOS
+    «Представляю участников!». The host speaks the TV catchphrase (Wikiquote /
+    Первый канал): «Добрый вечер! Здравствуйте, уважаемые дамы и господа!»,
+    the current weekday instead of a hardcoded Friday, «В эфире капитал-шоу
+    Поле чудес!», then — over the «выход участников» bed — «под аплодисменты
+    зрительного зала, я рад представить вам тройку игроков!». Later tours use
+    «И вновь в эфире…» plus a new triple; финал / суперфинал are named.

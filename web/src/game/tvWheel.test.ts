@@ -12,6 +12,7 @@ import {
   WHEEL_SECTOR_COUNT,
   WHEEL_SECTORS,
   wheelSectorLabel,
+  wheelSectorLabelFontSize,
 } from './tvWheel';
 
 describe('TV 36-sector drum (DIFF #26)', () => {
@@ -24,13 +25,13 @@ describe('TV 36-sector drum (DIFF #26)', () => {
     }
   });
 
-  it('includes the classic specials without key or chance', () => {
+  it('includes one bankrupt, one prize, one plus, and several zeros', () => {
     const kinds = WHEEL_SECTORS.map((s) => s.kind);
     expect(kinds.filter((k) => k === 'bankrupt')).toHaveLength(1);
-    expect(kinds.filter((k) => k === 'prize')).toHaveLength(2);
-    expect(kinds.filter((k) => k === 'plus')).toHaveLength(2);
+    expect(kinds.filter((k) => k === 'prize')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'plus')).toHaveLength(1);
     expect(kinds.filter((k) => k === 'x2')).toHaveLength(2);
-    expect(kinds.filter((k) => k === 'zero')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'zero').length).toBeGreaterThan(1);
   });
 
   it('never places the same point value on neighbouring wedges', () => {
@@ -47,6 +48,12 @@ describe('TV 36-sector drum (DIFF #26)', () => {
     expect(wheelSectorLabel({ kind: 'bankrupt' })).toBe('Б');
     expect(wheelSectorLabel({ kind: 'prize' })).toBe('П');
     expect(wheelSectorLabel({ kind: 'points', value: 1000 })).toBe('1000');
+    expect(wheelSectorLabelFontSize('Б')).toBe(18);
+    expect(wheelSectorLabelFontSize('0')).toBe(18);
+    expect(wheelSectorLabelFontSize('+')).toBe(18);
+    expect(wheelSectorLabelFontSize('×2')).toBe(13);
+    expect(wheelSectorLabelFontSize('500')).toBe(9);
+    expect(wheelSectorLabelFontSize('1000')).toBe(8);
   });
 });
 

@@ -428,18 +428,6 @@ button:disabled {
   text-align: center;
 }
 
-.statusline {
-  margin: 0;
-  width: min(100%, 920px);
-  padding: 0.4rem 0.7rem;
-  background: var(--ega-gray);
-  color: #14161f;
-  font-size: 0.8rem;
-  border-radius: 4px;
-  overflow: auto;
-  white-space: pre-wrap;
-}
-
 /* ------------------------------------------------------------------ admin */
 
 .admin-view {

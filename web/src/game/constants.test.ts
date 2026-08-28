@@ -9,8 +9,11 @@ import {
   MONEY_VALUES,
   PLAYER_ROUND_NAMES,
   PRIZES,
-  SEAT2_NUDGE_X,
-  SEATS,
+    SEAT1_NUDGE_X,
+    SEAT1_NUDGE_Y,
+    SEAT2_LABEL_NUDGE_X,
+    SEAT2_NUDGE_X,
+    SEATS,
   SECTOR_ICONS,
   SECTOR_VALUES,
   STAGE_NAMES,
@@ -63,8 +66,9 @@ describe('game constants (oracle data tables)', () => {
     expect(SEATS[2].labelOfs).toBe((0xdf + 0x50) * 640 + 0x164);
     expect(SEATS[2].moneyOfs).toBe(0xc1 * 640 + 0x178);
     expect(liveSeat(2).spriteOfs).toBe(SEATS[2].spriteOfs + SEAT2_NUDGE_X);
-    expect(liveSeat(2).labelOfs).toBe(SEATS[2].labelOfs + SEAT2_NUDGE_X);
-    expect(liveSeat(1)).toBe(SEATS[1]);
+    expect(liveSeat(2).labelOfs).toBe(SEATS[2].labelOfs + SEAT2_LABEL_NUDGE_X);
+    expect(liveSeat(1).spriteOfs).toBe(SEATS[1].spriteOfs + SEAT1_NUDGE_Y * 640 + SEAT1_NUDGE_X);
+    expect(liveSeat(1).labelOfs).toBe(SEATS[1].labelOfs + SEAT1_NUDGE_Y * 640 + SEAT1_NUDGE_X);
     expect(SEATS.map((s) => s.caption)).toEqual(['1-ый ИГРОК', '2-ой ИГРОК', '3-ий ИГРОК']);
     for (const seat of SEATS) {
       expect(seat.talkBubbleOfs).toBe(seat.spriteOfs - 17888);

@@ -35,7 +35,6 @@ export const SFX_FILES = {
   autoWin: 'auto-win.mp3',
   automobileYell: 'automobile-yell.mp3',
   vseVashe: 'vse-vashe.mp3',
-  spinPleaseMusic: 'spin-please-music.mp3',
 } as const;
 
 export type SfxId = keyof typeof SFX_FILES;

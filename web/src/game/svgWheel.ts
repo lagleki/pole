@@ -7,7 +7,8 @@
  */
 import { SCREEN_W } from '../engine/types';
 import { defaultRenderSpec } from '../spec';
-import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, type TvSector, wheelSectorLabel } from './tvWheel';
+import { DRUM_NUDGE_X } from './constants';
+import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, type TvSector, wheelSectorLabel, wheelSectorLabelFontSize } from './tvWheel';
 
 export interface WheelView {
   setFrame(sector: number): void;
@@ -19,7 +20,7 @@ export interface WheelView {
 const { x: BOX_X, y: BOX_Y, width: BOX_W } = defaultRenderSpec.wheel.clearRect;
 /** Alphabet row (letter backs at 0x14c). Overlay stops here so the drum tucks under the letters. */
 const CLIP_Y = 0x14c;
-const HUB_X = BOX_X + BOX_W / 2;
+const HUB_X = BOX_X + BOX_W / 2 + DRUM_NUDGE_X;
 /** Shifted down vs the DOS cell center so a bigger disk tucks under the letters. */
 const HUB_Y = 328;
 const R = 136;
@@ -54,7 +55,7 @@ function wedgeFill(index: number): { fill: string; ink: string } {
 
 function sectorMark(sector: TvSector, ink: string): string {
   const label = wheelSectorLabel(sector);
-  const fontSize = label.length >= 4 ? 8 : /^\d{3}$/.test(label) ? 9 : 13;
+  const fontSize = wheelSectorLabelFontSize(label);
   return `<text x="0" y="${(-LABEL_R).toFixed(1)}" fill="${ink}" font-size="${fontSize}"
           font-family="PT Mono, ui-monospace, monospace" font-weight="700"
           text-anchor="middle" dominant-baseline="middle">${label}</text>`;
