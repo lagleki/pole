@@ -692,13 +692,24 @@ class Game {
     const { moneyOfs } = liveSeat(seatIdx);
     s.fillRect(moneyOfs - 644, 30, 84, 7);
     const stride = moneyRecountStride(seat.score);
-    for (let i = 1; i <= seat.score; i += 1) {
-      s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
-      const freq = this.random(10) + 50;
-      if (i % stride === 0 || i === seat.score) {
-        // DIFF #25: live PWM is muted; money ticks stay audible like the assistant walk.
-        await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
+    // Draw coins with the same stride as audio ticks to cap animation at 3s.
+    for (let i = stride; i <= seat.score; i += stride) {
+      // Draw `stride` coins at once for visual density.
+      for (let c = 0; c < stride; c += 1) {
+        s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
       }
+      const freq = this.random(10) + 50;
+      // DIFF #25: live PWM is muted; money ticks stay audible like the assistant walk.
+      await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
+    }
+    // Final tick for any remainder coins.
+    const remainder = seat.score % stride;
+    if (remainder > 0) {
+      for (let c = 0; c < remainder; c += 1) {
+        s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
+      }
+      const freq = this.random(10) + 50;
+      await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
     }
     this.paintScore(seatIdx);
   }
@@ -1494,7 +1505,8 @@ class Game {
     const human = this.isHuman(this.curPlayer);
 
     // DOS: box game after 3 successful MOVES, human seats only (deviations #4, #5).
-    if (this.movesForBox > 2 && human) {
+    // WEB: all seats trigger the box game, not just human (DIFF #30).
+    if (this.movesForBox > 2) {
       await this.boxGame();
     }
 
