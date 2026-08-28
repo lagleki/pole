@@ -1331,6 +1331,7 @@ class Game {
 
     this.m.input.hand.step = 0;
     this.clearAlphabetCell(letterIdx);
+    this.vanishAlphabetTile(letterIdx);
     const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
     await this.finishLetterAnnouncement(letterSpeech);
     await this.yakubovichSetSilent();
@@ -1358,14 +1359,12 @@ class Game {
     if (k === 0) {
       this.playSfx('letterWrong');
       await this.yakubovichReply('Нет в этом слове такой буквы!', 'Переход хода..');
-      await this.vanishAlphabetTile(letterIdx);
       return false;
     }
 
     if (n === 0) {
       await this.yakubovichTalk('Есть такая буква!', 'Браво!!');
     }
-    await this.vanishAlphabetTile(letterIdx);
     s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
 
     // WEB: beat after the host confirms, then the assistant leaves the wings.
@@ -1389,7 +1388,7 @@ class Game {
         s.screenCopy(15, 19, f - BACKBUF, f);
         s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
         this.playSfx('letterCorrect');
-        await this.waitKey(700);
+        await this.waitKey(1450);
       } else {
         const nextStep = stepDelta[(i3 + 1) & 3];
         if (k > 0 && walk + nextStep >= assistPos[k]) {
