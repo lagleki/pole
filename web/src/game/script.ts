@@ -1128,14 +1128,12 @@ class Game {
       const before = seat.score;
       // DIFF #29: TV-scale purse; DOS awarded 100.
       seat.score += 1000;
-      await this.waitKey(INFINITE);
       await this.yakubovichSetSilent();
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       await this.updateMoney(this.curPlayer, before);
     } else {
       this.playSfx('boxEmpty');
       await this.yakubovichReply('Увы! Эта', 'шкатулка пуста!');
-      await this.waitKey(INFINITE);
       await this.yakubovichSetSilent();
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       await this.updateMoney(this.curPlayer, seat.score);
@@ -1607,7 +1605,6 @@ class Game {
     this.playSfx('sponsor');
     await this.yakubovichSetSilent();
     await this.yakubovichTalk('РЕКЛАМНАЯ', 'ПАУЗА!');
-    await this.waitKey(INFINITE);
     await this.yakubovichSetSilent();
 
     s.screenCopy(168, 170, BACKBUF + 0x1afd8, 0x1afd8);
