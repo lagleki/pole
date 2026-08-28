@@ -592,7 +592,8 @@ class Game {
     return this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
   }
 
-  private async announceLetter(letterChar: string, n: number): Promise<void> {
+  /** Start «Буква N» (NPC bubble too). Wait with `finishLetterAnnouncement`. */
+  private beginLetterAnnouncement(letterChar: string, n: number): HostSpeech | null {
     const text = n === 0 ? `Буква ${letterChar}` : `${n}-я буква`;
     const speech = this.speakLetterChoice(letterChar, n);
     if (!this.isHuman(this.curPlayer)) {
@@ -601,12 +602,19 @@ class Game {
       s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
       s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
       s.print(text, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(text) << 2), 0, 14, 8);
-      if (speech) {
-        await speech.ended;
-      } else {
-        await this.waitKey(1000);
-      }
-      s.screenCopy(84, 39, bubbleOfs, BACKBUF2);
+    }
+    return speech;
+  }
+
+  private async finishLetterAnnouncement(speech: HostSpeech | null): Promise<void> {
+    if (speech) {
+      await speech.ended;
+    } else if (!this.isHuman(this.curPlayer)) {
+      await this.waitKey(1000);
+    }
+    if (!this.isHuman(this.curPlayer)) {
+      const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
+      this.screen.screenCopy(84, 39, bubbleOfs, BACKBUF2);
     }
   }
 
@@ -1242,10 +1250,7 @@ class Game {
     const letterChar = decodeCp866(new Uint8Array([letterByte]));
     this.available[letterIdx] = 0x20;
     this.syncDebug();
-    // WEB: speak the pick immediately; do not wait for TTS before the board.
-    if (this.isHuman(this.curPlayer)) {
-      this.speakLetterChoice(letterChar, n);
-    }
+    const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
 
     // Letter disappear effect on the alphabet row (dpr:1410-1424), immediately.
     const cell = 0x14c * SCREEN_W + letterIdx * 20;
@@ -1262,9 +1267,7 @@ class Game {
       }
       await this.m.audio.playWav(this.audioBuf.subarray(0, k));
     }
-    if (!this.isHuman(this.curPlayer)) {
-      await this.announceLetter(letterChar, n);
-    }
+    await this.finishLetterAnnouncement(letterSpeech);
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).
@@ -1298,7 +1301,10 @@ class Game {
     }
     s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
 
-    // Assistant walk (dpr:1456-1480). WEB: she starts at once; card sting after each flip.
+    // WEB: beat after «Буква N» before the assistant leaves the wings.
+    await this.delay(1000);
+
+    // Assistant walk (dpr:1456-1480). WEB: card sting after each flip.
     const stepDelta = [3, 10, 0, 12];
     const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
     let i3 = 0;
@@ -1434,8 +1440,7 @@ class Game {
       return result === 'won' ? 'won' : 'next';
     }
 
-    await this.yakubovichSetSilent();
-    this.playSfx('spinPleaseMusic');
+    this.yakubovichSetSilent();
     await this.spinWheel();
 
     const landed = WHEEL_SECTORS[this.curSector];
