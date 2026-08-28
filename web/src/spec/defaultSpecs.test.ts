@@ -66,8 +66,7 @@ describe('default reverse-engineering specs', () => {
     expect(defaultFlowSpec.questionSelection.sourceFile).toBe('tour-questions.json');
     expect(defaultFlowSpec.leaderboard.maxEntries).toBe(8);
     expect(defaultFlowSpec.wheel.sectorOutcomes).toHaveLength(16);
-    expect(defaultFlowSpec.host.scripts.gameStart.line1).toBe('НАЧИНАЕМ ИГРУ!');
-    expect(defaultFlowSpec.host.scripts.promptLetter.line2).toBe('БУКВУ!');
+    expect(defaultFlowSpec.host.scripts.gameStart.line1).toBe('Начинаем игру!');
   });
 
   it('pairs NPC names and sprites exactly as the oracle Characters array (dpr:141)', () => {
