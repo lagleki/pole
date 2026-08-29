@@ -92,7 +92,8 @@ interface DriveLog {
 /**
  * Scene-aware driver: makes seat 1 human (name ТЕСТ), then plays per policy.
  * Human decisions: Space at hand.ofs=4 → 'Кручу барабан'; ArrowLeft to 0 then
- * Space → 'Скажу слово'. Letter pick: Space, ArrowRight past used letters.
+ * Space → 'Скажу слово'. Box game (DIFF #30): same hold-Space poll as the
+ * turn hand ('Правая'). Letter pick: Space, ArrowRight past used letters.
  */
 async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxIterations = 12000): Promise<DriveLog> {
   let finished = false;
@@ -170,6 +171,13 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
       } else {
         await holdSpace(h);
       }
+      continue;
+    }
+
+    // playerDecision polls Space across delay(100); an instant tap is gone
+    // before the next frame. Same hold as «Кручу барабан».
+    if (state.scene === 'box-game' && humanTurn) {
+      await holdSpace(h);
       continue;
     }
 

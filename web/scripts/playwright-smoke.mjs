@@ -439,20 +439,50 @@ async function captureSmokeFlow() {
   try {
     await waitForServer(server);
 
-    browser = await chromium.launch({ headless: !headed });
+    // Installed Google Chrome (`google-chrome` / `chrome`), not Playwright's
+    // bundled Chromium — no `npx playwright install` required.
+    browser = await chromium.launch({
+      channel: 'chrome',
+      headless: !headed,
+    });
     const page = await browser.newPage({
       viewport: { width: 1400, height: 1200 },
     });
 
-    page.on('console', (message) => {
-      if (message.type() === 'error') {
-        consoleErrors.push(`console.${message.type()}: ${message.text()}`);
+    const isChromeIconProbe = (url) => {
+      try {
+        const { pathname } = new URL(url);
+        return /\/favicon\.ico$/i.test(pathname) || /apple-touch-icon/i.test(pathname);
+      } catch {
+        return false;
       }
+    };
+
+    page.on('console', (message) => {
+      if (message.type() !== 'error') {
+        return;
+      }
+      const text = message.text();
+      // System Chrome logs icon 404s as console.error with no URL; real HTTP
+      // failures are recorded on the response handler below.
+      if (/Failed to load resource:.*404/.test(text)) {
+        return;
+      }
+      consoleErrors.push(`console.${message.type()}: ${text}`);
     });
     page.on('pageerror', (error) => {
       consoleErrors.push(`pageerror: ${error.message}`);
     });
+    page.on('response', (response) => {
+      if (response.status() < 400 || isChromeIconProbe(response.url())) {
+        return;
+      }
+      consoleErrors.push(`http ${response.status()}: ${response.url()}`);
+    });
     page.on('requestfailed', (request) => {
+      if (isChromeIconProbe(request.url())) {
+        return;
+      }
       const failure = request.failure();
       consoleErrors.push(`requestfailed: ${request.url()} ${failure?.errorText ?? ''}`.trim());
     });
