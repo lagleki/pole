@@ -88,9 +88,10 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     Web sound defaults to ON so the host is audible after the first gesture
     (Android Chrome blocks intro mp3s until a tap; the play view waits for
     that tap and then unlocks every SFX element). Ctrl+S / the sound button still mute both TTS and SFX. Spin/round-win
-    lines use the name typed at presentation (not «2-ой игрок»). Punctuation
-    from the lines and CHGK prompts is kept in the TTS string (commas between
-    a name and a new sentence; remote URLs encode ? ! . , and clip at a
+    lines use the name typed at presentation (not «2-ой игрок»). Static host
+    cues are one spoken sentence with punctuation (not two DOS bubble rows).
+    A name plus a continuation still joins with a comma when needed. Punctuation
+    from the lines and CHGK prompts is kept in the TTS string; remote URLs encode ? ! . , and clip at a
     sentence end). If the browser has no speechSynthesis voices (typical
     Chromium on Linux), the host falls back to Google Translate TTS audio,
     then ResponsiveVoice. Probe logs go to the console as `[pole-tts]`.

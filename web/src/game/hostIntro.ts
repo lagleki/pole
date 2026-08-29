@@ -1,7 +1,7 @@
 /**
  * WEB studio greeting (DIFF #27). Wording follows the TV catchphrase
  * (Wikiquote / эфир Первого канала), with the calendar weekday in place of
- * the show's usual «Пятница!».
+ * the show's usual «Пятница!». Each cue is one spoken line for TTS.
  */
 
 const WEEKDAYS_RU = [
@@ -18,40 +18,35 @@ export function broadcastWeekday(now = new Date()): string {
   return WEEKDAYS_RU[now.getDay()];
 }
 
-export type HostLine = readonly [string, string];
-
 /** Opening of the first tour: greeting, then invite after the applause bed. */
-export function firstTourGreeting(weekday: string): readonly HostLine[] {
+export function firstTourGreeting(weekday: string): readonly string[] {
   return [
-    ['Добрый вечер!', 'Здравствуйте, уважаемые дамы и господа!'],
-    [`${weekday}!`, 'В эфире капитал-шоу Поле чудес!'],
+    'Добрый вечер! Здравствуйте, уважаемые дамы и господа!',
+    `${weekday}! В эфире капитал-шоу Поле чудес!`,
   ];
 }
 
-export function firstTourInvite(): HostLine {
-  return [
-    'И как обычно, под аплодисменты зрительного зала,',
-    'я рад представить вам тройку игроков!',
-  ];
+export function firstTourInvite(): string {
+  return 'И как обычно, под аплодисменты зрительного зала, я рад представить вам тройку игроков!';
 }
 
 /** Later tours: shorter re-open, then a new triple (or the superfinal). */
-export function laterTourGreeting(stage: number): HostLine {
+export function laterTourGreeting(stage: number): string {
   if (stage >= 7) {
-    return ['Суперфинал!', 'В эфире капитал-шоу Поле чудес!'];
+    return 'Суперфинал! В эфире капитал-шоу Поле чудес!';
   }
   if (stage === 6) {
-    return ['Финал!', 'В эфире капитал-шоу Поле чудес!'];
+    return 'Финал! В эфире капитал-шоу Поле чудес!';
   }
-  return ['И вновь в эфире', 'капитал-шоу Поле чудес!'];
+  return 'И вновь в эфире капитал-шоу Поле чудес!';
 }
 
-export function laterTourInvite(stage: number): HostLine {
+export function laterTourInvite(stage: number): string {
   if (stage >= 7) {
-    return ['Приглашаю в студию', 'участников суперфинала!'];
+    return 'Приглашаю в студию участников суперфинала!';
   }
   if (stage === 6) {
-    return ['Приглашаю в студию', 'финальную тройку игроков!'];
+    return 'Приглашаю в студию финальную тройку игроков!';
   }
-  return ['Приглашаю в студию', 'новую тройку игроков!'];
+  return 'Приглашаю в студию новую тройку игроков!';
 }

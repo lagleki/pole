@@ -31,6 +31,7 @@ describe('spokenCasing', () => {
     expect(hostSpeechText('Есть такая буква!', 'Браво!!')).toBe('Есть такая буква! Браво!!');
     expect(hostSpeechText('АНДРЕЙ', 'Вращайте барабан!')).toBe('Андрей, вращайте барабан!');
     expect(hostSpeechText('АНДРЕЙ', 'выиграл раунд!')).toBe('Андрей выиграл раунд!');
+    expect(hostSpeechText('Назовите букву!')).toBe('Назовите букву!');
     expect(
       hostSpeechText('ЭТО по-латыни Prunus armeniaca, т.е. "армянский фрукт".', ''),
     ).toBe('ЭТО по-латыни Prunus armeniaca, т.е. "армянский фрукт".');

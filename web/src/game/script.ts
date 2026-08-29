@@ -513,8 +513,8 @@ class Game {
     s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0xd1 * SCREEN_W + 0x214, 16);
   }
 
-  /** dpr:511-544. DIFF #21: no speech bubble — wait for host audio, then lip-sync. */
-  private async yakubovichTalk(line1: string, line2: string): Promise<void> {
+  /** dpr:511-544. DIFF #21: one spoken line (optional name + continuation). */
+  private async yakubovichTalk(line1: string, line2 = ''): Promise<void> {
     const spoken = hostSpeechText(line1, line2);
     const speech = this.ctx.tts?.speak(spoken) ?? null;
     if (!speech) {
@@ -528,7 +528,7 @@ class Game {
   }
 
   /** DIFF #24: beat after the player's answer, then the host reply. */
-  private async yakubovichReply(line1: string, line2: string): Promise<void> {
+  private async yakubovichReply(line1: string, line2 = ''): Promise<void> {
     await this.waitKey(700);
     await this.yakubovichTalk(line1, line2);
   }
@@ -938,19 +938,16 @@ class Game {
     // WEB DIFF #27: TV studio open (Wikiquote catchphrase + calendar weekday).
     if (this.stage === 0) {
       for (const line of firstTourGreeting(broadcastWeekday())) {
-        await this.yakubovichTalk(line[0], line[1]);
+        await this.yakubovichTalk(line);
       }
     } else {
-      const line = laterTourGreeting(this.stage);
-      await this.yakubovichTalk(line[0], line[1]);
+      await this.yakubovichTalk(laterTourGreeting(this.stage));
     }
     if (this.stage === 0) {
-      const invite = firstTourInvite();
-      await this.yakubovichTalk(invite[0], invite[1]);
+      await this.yakubovichTalk(firstTourInvite());
     } else {
       await this.delay(2000);
-      const invite = laterTourInvite(this.stage);
-      await this.yakubovichTalk(invite[0], invite[1]);
+      await this.yakubovichTalk(laterTourInvite(this.stage));
     }
   }
 
@@ -986,7 +983,7 @@ class Game {
           s.drawSprite(SPRITE.PLAYER, layout.spriteOfs, 2);
           const entry = input.beginTextEntry(10, layout.labelOfs + SCREEN_W * 14, 8);
           await Promise.all([
-            this.yakubovichTalk('Пожалуйста,', 'представьтесь!'),
+            this.yakubovichTalk('Пожалуйста, представьтесь!'),
             input.waitEnter(INFINITE),
           ]);
           input.endTextEntry();
@@ -1055,10 +1052,10 @@ class Game {
     }
 
     await this.yakubovichSetSilent();
-    await this.yakubovichTalk('И вот задание', 'на этот тур.');
+    await this.yakubovichTalk('И вот задание на этот тур.');
     await this.yakubovichSetSilent();
     this.setSfxVolume('playersEnter', PLAYERS_ENTER_UNDER_HOST);
-    await this.yakubovichTalk(question.theme, '');
+    await this.yakubovichTalk(question.theme);
     // DIFF #28: DOS waited for Space here; continue into the first spin.
     await this.yakubovichSetSilent();
     this.syncDebug();
@@ -1072,7 +1069,7 @@ class Game {
     const { talkBubbleOfs } = liveSeat(this.curPlayer);
     const areaOfs = talkBubbleOfs - 60 * SCREEN_W - 32;
 
-    await this.yakubovichTalk('Три правильно угаданные буквы дают вам право на две шкатулки. Две шкатулки в студию!', '');
+    await this.yakubovichTalk('Три правильно угаданные буквы дают вам право на две шкатулки. Две шкатулки в студию!');
     s.screenCopy(104, 121, BACKBUF + areaOfs, areaOfs);
 
     let k = 61;
@@ -1112,7 +1109,7 @@ class Game {
       }
     }
     await this.yakubovichSetSilent();
-    await this.yakubovichTalk('Какую вам шкатулку? Левую-правую, правую-левую?', '');
+    await this.yakubovichTalk('Какую вам шкатулку? Левую-правую, правую-левую?');
     const choice = await this.playerDecision('', '', 'Левая', 'Правая');
     await this.yakubovichSetSilent();
     s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
@@ -1122,7 +1119,7 @@ class Game {
     s.drawSprite(SPRITE.BOX_MONEY, talkBubbleOfs - 60 * SCREEN_W - 30 + 56 * k, 7);
     if (choice === k) {
       this.playSfx('boxMoney');
-    await this.yakubovichReply('Браво!!!', 'Вы отгадали!');
+    await this.yakubovichReply('Браво!!! Вы отгадали!');
       const before = seat.score;
       // DIFF #29: TV-scale purse; DOS awarded 100.
       seat.score += 1000;
@@ -1131,7 +1128,7 @@ class Game {
       await this.updateMoney(this.curPlayer, before);
     } else {
       this.playSfx('boxEmpty');
-      await this.yakubovichReply('Увы! Эта', 'шкатулка пуста!');
+      await this.yakubovichReply('Увы! Эта шкатулка пуста!');
       await this.yakubovichSetSilent();
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       await this.updateMoney(this.curPlayer, seat.score);
@@ -1162,14 +1159,14 @@ class Game {
     if (match) {
       this.playSfx('wordCorrect');
       const word = decodeCp866(this.guessedWord);
-      await this.yakubovichReply(word + '.', 'Ну конечно!');
+      await this.yakubovichReply(`${word}. Ну конечно!`);
       await this.waitKey(2500);
       await this.yakubovichSetSilent();
       return 'won';
     }
     s.screenCopy(k, 31, this.wordPos, BACKBUF + this.wordPos);
     this.playSfx(this.stage === 7 ? 'wordWrongSuper' : 'wordWrong');
-    await this.yakubovichReply('Неправильно! Вы', 'покидаете игру!');
+    await this.yakubovichReply('Неправильно! Вы покидаете игру!');
     this.removePlayer();
     return 'removed';
   }
@@ -1388,12 +1385,12 @@ class Game {
 
     if (k === 0) {
       this.playSfx('letterWrong');
-      await this.yakubovichReply('Увы, такой буквы нет!', '');
+      await this.yakubovichReply('Увы, такой буквы нет!');
       return false;
     }
 
     if (n === 0) {
-      await this.yakubovichTalk('И в этом слове есть такая буква!', 'Откройте!');
+      await this.yakubovichTalk('И в этом слове есть такая буква! Откройте!');
     }
     s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
 
@@ -1481,10 +1478,10 @@ class Game {
     let i = 3;
     let j = 100;
     for (;;) {
-      await this.yakubovichTalk('ПРИЗ или', `${MONEY_VALUES[i]} рублей?`);
+      await this.yakubovichTalk(`Приз или ${MONEY_VALUES[i]} рублей?`);
       const takeMoney = (await this.playerDecision('Беру    Беру', 'ПРИЗ   ДЕНЬГИ', 'Приз!', 'Деньги.')) > 0;
       if (takeMoney) {
-        await this.yakubovichTalk('Забирайте', 'свои ДЕНЬГИ!');
+        await this.yakubovichTalk('Забирайте свои деньги!');
         do {
           await this.m.audio.sound(this.random(50), 10);
           s.drawSprite(SPRITE.RUB, this.random(295) * SCREEN_W + this.random(400), 2);
@@ -1495,7 +1492,7 @@ class Game {
       // DOS: deviation #7 — Yakubovich always bargains up to МИЛЛИОН (i = 0).
       if (i === 0) {
         this.playSfx('vseVashe');
-        await this.yakubovichTalk('Забирайте', 'свой ПРИЗ!');
+        await this.yakubovichTalk('Забирайте свой приз!');
         s.print('Вы выбрали ПРИЗ и мы Вас поздравляем!', 208 * SCREEN_W + 92, 0, 14, 8);
         s.print('Фирма ИНТЕРМОДА и ПОЛЕ ЧУДЕС дарит Вам', 226 * SCREEN_W + 88, 0, 14, 8);
         const prize = `${PRIZES[this.random(10)]} компании PROCTER & GAMBLE!`;
@@ -1568,7 +1565,7 @@ class Game {
     switch (landed.kind) {
       case 'bankrupt': {
         this.playSfx('bankrupt');
-        await this.yakubovichTalk('Все деньги сгорели!', 'Увы! Переход хода..');
+        await this.yakubovichTalk('Все деньги сгорели! Увы! Переход хода.');
         const burned = seat.score;
         seat.score = 0;
         await this.updateMoney(this.curPlayer, burned);
@@ -1576,12 +1573,12 @@ class Game {
       }
       case 'zero': {
         this.playSfx('sectorZero');
-        await this.yakubovichTalk('У вас 0 очков!', 'Увы! Переход хода..');
+        await this.yakubovichTalk('У вас 0 очков! Увы! Переход хода.');
         return 'next';
       }
       case 'plus': {
         this.playSfx('sectorPlus');
-        await this.yakubovichTalk('Сектор ПЛЮС!', 'Открой любую букву!');
+        await this.yakubovichTalk('Сектор плюс! Откройте любую букву!');
         const n = await this.pickPlusPosition();
         const letterIdx = this.guessedWord[n - 1] - 0x80;
         const found = await this.openLetter(letterIdx, n, { kind: 'keep' });
@@ -1595,16 +1592,16 @@ class Game {
       }
       case 'x2': {
         this.playSfx('sectorX2');
-        await this.yakubovichTalk('У вас призовой сектор — все ваши очки умножаются на 2, буква!', '');
+        await this.yakubovichTalk('У вас призовой сектор — все ваши очки умножаются на 2, буква!');
         award = { kind: 'double' };
         break;
       }
       case 'prize': {
         this.playSfx('sectorPrize');
-        await this.yakubovichTalk('Сектор ПРИЗ!', 'ПРИЗ или играем?');
+        await this.yakubovichTalk('Сектор приз! Приз или играем?');
         const play = (await this.playerDecision('Беру   Буду', 'ПРИЗ  ИГРАТЬ', 'Приз!', 'Играем!', human ? undefined : 1)) > 0;
         if (play) {
-          await this.yakubovichReply('Если так, то', 'назовите букву.');
+          await this.yakubovichReply('Если так, то назовите букву.');
           break;
         }
         await this.prizeCeremony();
@@ -1612,7 +1609,7 @@ class Game {
       }
       case 'points': {
         award = { kind: 'perHit', unit: landed.value };
-        await this.yakubovichTalk(`У вас ${landed.value} очков!`, 'Назовите букву!');
+        await this.yakubovichTalk(`У вас ${landed.value} очков! Назовите букву!`);
         break;
       }
     }
@@ -1658,7 +1655,7 @@ class Game {
     this.playSfx('commercial');
     this.playSfx('sponsor');
     await this.yakubovichSetSilent();
-    await this.yakubovichTalk('РЕКЛАМНАЯ', 'ПАУЗА!');
+    await this.yakubovichTalk('Рекламная пауза!');
     await this.yakubovichSetSilent();
 
     s.screenCopy(168, 170, BACKBUF + 0x1afd8, 0x1afd8);
@@ -1719,7 +1716,7 @@ class Game {
       s.print('На конверте сделайте пометку КОМПЬЮТЕРНЫЙ ПРИЗ', 0x2e938, 0, 14, 8);
       s.print('Автор Дима Башуров из Российского Федерального Ядерного Центра', 0x33e48, 0, 8, 8);
       s.print('Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', 0x354a0, 0, 8, 8);
-      await this.yakubovichTalk('Поздравляю! Вы', 'выиграли финал!');
+      await this.yakubovichTalk('Поздравляю! Вы выиграли финал!');
       await this.waitKey(INFINITE);
       await this.yakubovichSetSilent();
     }

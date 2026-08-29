@@ -37,12 +37,8 @@ export interface StageSpec {
   names: readonly string[];
 }
 
-export interface HostCueSpec {
-  line1: string;
-  line2: string;
-  bubbleMs: number;
-  talkMs: number;
-}
+/** One spoken host line (DIFF #21). Not split for a DOS two-row bubble. */
+export type HostCueSpec = string;
 
 export interface AssetSpec {
   canonicalEvidenceOrder: readonly string[];

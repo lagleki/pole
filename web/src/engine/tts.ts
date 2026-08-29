@@ -35,7 +35,7 @@ const STARTS_LOWER = /^[а-яёa-z]/;
 /** Unofficial remote TTS query caps; keep a sentence end when clipping. */
 const REMOTE_TTS_MAX = 200;
 
-export function hostSpeechText(line1: string, line2: string): string {
+export function hostSpeechText(line1: string, line2 = ''): string {
   const parts = [line1, line2]
     .map((part) => spokenCasing(part.trim()))
     .filter((part) => part.length > 0);
