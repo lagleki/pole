@@ -1310,8 +1310,6 @@ class Game {
       hand.prev = hand.ofs;
 
       let i = startIdx;
-      // Track the last position we actually drew the hand on.
-      let drawnOfs = hand.ofs;
       for (;;) {
         // If input.ts moved us onto a used cell, jump to the nearest available
         // in the travel direction.
@@ -1337,12 +1335,9 @@ class Game {
           idx = next;
         }
         i = idx;
-        // Erase wherever we last drew the hand, then draw at new position.
-        if (drawnOfs !== hand.ofs) {
-          this.eraseAlphabetHand(drawnOfs);
-        }
+        // Repaint the alphabet row to erase the previous hand position, then draw hand.
+        this.paintAlphabetRow();
         s.drawSprite(SPRITE.HAND, hand.ofs, 2);
-        drawnOfs = hand.ofs;
         if (input.pollKeyPressed()) {
           this.dismissAlphabetPick(i, hand.ofs, hand.prev);
           return i;
