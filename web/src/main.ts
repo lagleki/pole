@@ -21,6 +21,7 @@ import {
   savePrefs,
   saveProgress,
 } from './game/persist';
+import { mountSvgAlphabet } from './game/svgAlphabet';
 import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
@@ -74,6 +75,7 @@ app.innerHTML = `
         <div class="screen-stack">
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
+          <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button" hidden>
             Коснитесь экрана, чтобы включить звук
@@ -165,6 +167,7 @@ function requireElement<T extends Element>(selector: string): T {
 const canvas = requireElement<HTMLCanvasElement>('#screen');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
+const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
 const tabAdminBtn = requireElement<HTMLButtonElement>('#tab-admin');
@@ -191,6 +194,7 @@ const entryLabel = requireElement<HTMLLabelElement>('#entry-bar .entry-label');
 const hostSpeechLive = requireElement<HTMLParagraphElement>('#host-speech');
 
 const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
+const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 
 // ------------------------------------------------------------ session state
 
@@ -457,6 +461,7 @@ async function gameLoop(): Promise<void> {
         state,
         options: { humanSeats },
         wheel: svgWheel,
+        alphabet: svgAlphabet,
         persist: persistEnabled
           ? { save: saveProgress, clear: clearProgress }
           : undefined,
@@ -474,6 +479,7 @@ async function gameLoop(): Promise<void> {
       gameSfx.stop();
       presenter.stop();
       svgWheel.setVisible(false);
+      svgAlphabet.setVisible(false);
       currentRun = null;
     }
     summarizeState();

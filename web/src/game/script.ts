@@ -18,6 +18,7 @@ import {
   liveSeat,
 } from './constants';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
+import type { AlphabetView } from './svgAlphabet';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
@@ -137,6 +138,8 @@ export interface GameContext {
   options?: GameOptions;
   /** SVG drum overlay (DIFF #19). */
   wheel?: WheelView;
+  /** SVG alphabet strip (DIFF #19). */
+  alphabet?: AlphabetView;
   /** localStorage checkpoint (DIFF #20). */
   persist?: {
     save(snapshot: GameProgressSave): void;
@@ -298,10 +301,21 @@ class Game {
     }
     this.ctx.wheel?.setFrame(a);
     this.ctx.wheel?.setVisible(true);
+    this.syncAlphabet(true);
   }
 
   private hideWheel(): void {
     this.ctx.wheel?.setVisible(false);
+    this.ctx.alphabet?.setVisible(false);
+  }
+
+  private syncAlphabet(visible = true): void {
+    const alphabet = this.ctx.alphabet;
+    if (!alphabet) {
+      return;
+    }
+    alphabet.setAvailable(this.available);
+    alphabet.setVisible(visible);
   }
 
   private persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' }): void {
@@ -426,6 +440,11 @@ class Game {
   }
 
   private paintAlphabetRow(): void {
+    const alphabet = this.ctx.alphabet;
+    if (alphabet) {
+      this.syncAlphabet(true);
+      return;
+    }
     const s = this.screen;
     let j = 332 * SCREEN_W + 31 * 20;
     for (let i = 31; i >= 0; i -= 1) {
@@ -645,6 +664,10 @@ class Game {
 
   /** Blank a used alphabet tile cell. */
   private clearAlphabetCell(letterIdx: number): void {
+    if (this.ctx.alphabet) {
+      this.ctx.alphabet.setVanishFrame(letterIdx, 3);
+      return;
+    }
     this.screen.fillRect(0x14c * SCREEN_W + letterIdx * 20, 18, 19, 7);
   }
 
@@ -652,8 +675,11 @@ class Game {
   private async vanishAlphabetTile(letterIdx: number): Promise<void> {
     const s = this.screen;
     const cell = 0x14c * SCREEN_W + letterIdx * 20;
+    const svg = this.ctx.alphabet;
     for (let i = 0; i <= 3; i += 1) {
-      if (i < 3) {
+      if (svg) {
+        svg.setVanishFrame(letterIdx, i);
+      } else if (i < 3) {
         s.drawSprite(SPRITE.LETTER_BACK1 + i, cell, 16);
       } else {
         s.fillRect(cell, 18, 19, 7);
@@ -923,10 +949,16 @@ class Game {
     let j = 332 * SCREEN_W + 31 * 20;
     for (let i = 31; i >= 0; i -= 1) {
       this.available[i] = 0x80 + i;
-      s.drawSprite(SPRITE.LETTER_BACK0, j, 8);
+      if (!this.ctx.alphabet) {
+        s.drawSprite(SPRITE.LETTER_BACK0, j, 8);
+      }
       j -= 20;
     }
-    s.print(this.available, 334 * SCREEN_W + 4, 0, 14, 20);
+    if (this.ctx.alphabet) {
+      this.syncAlphabet(true);
+    } else {
+      s.print(this.available, 334 * SCREEN_W + 4, 0, 14, 20);
+    }
 
     const saved = this.seats[0].spriteId;
     this.seats[0].spriteId = null; // dpr:1034 — avoid drawing seat 0 before presentation

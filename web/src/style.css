@@ -210,7 +210,7 @@ body::after {
 
 #screen {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   display: block;
   width: 100%;
   height: auto;
@@ -259,12 +259,56 @@ body::after {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 3;
+  z-index: 4;
   overflow: hidden;
 }
 
 .wheel-pegs[hidden] {
   display: none;
+}
+
+.alphabet-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.alphabet-overlay[hidden] {
+  display: none;
+}
+
+.alphabet-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.alpha-lift {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.alpha-tile.used .alpha-lift,
+.alpha-tile.used {
+  opacity: 0;
+}
+
+.alpha-tile.vanish-1 .alpha-lift {
+  transform: translateY(-3px);
+  opacity: 0.85;
+}
+
+.alpha-tile.vanish-2 .alpha-lift {
+  transform: translateY(-7px) scale(0.92);
+  opacity: 0.45;
+}
+
+.alpha-tile.vanish-3 .alpha-lift {
+  opacity: 0;
 }
 
 /* --------------------------------------------------------- touch controls */

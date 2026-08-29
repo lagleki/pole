@@ -5,7 +5,7 @@
  * Pegs live in a second overlay above the canvas so studio pixels show
  * through around the handles (no black halo).
  */
-import { SCREEN_W } from '../engine/types';
+import { SCREEN_W, VISIBLE_H } from '../engine/types';
 import { defaultRenderSpec } from '../spec';
 import { DRUM_NUDGE_X } from './constants';
 import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, type TvSector, wheelSectorLabel, wheelSectorLabelFontSize } from './tvWheel';
@@ -209,9 +209,10 @@ export interface WheelHoleKeep {
 /**
  * Make the drum disk transparent on the DOS canvas so the SVG overlay
  * (stacked behind) shows through down to the alphabet row — players and
- * name plates included. The pointing hand is then painted from the sprite
- * itself (not leftover floor pixels), so moving it cannot leave a gray
- * silhouette on the hole.
+ * name plates included. The alphabet strip (y ≥ CLIP_Y) is also punched so
+ * the SVG letter tiles show through; the pointing hand is then painted from
+ * the sprite itself (not leftover floor pixels), so moving it cannot leave a
+ * gray silhouette on the hole.
  */
 /** Half-width of the soft feather band at the hole edge, in CSS pixels. */
 const FEATHER = 2;
@@ -249,6 +250,13 @@ export function punchWheelHole(rgba: Uint8ClampedArray, keep?: WheelHoleKeep | n
     }
   }
 
+  for (let y = CLIP_Y; y < VISIBLE_H; y += 1) {
+    const row = y * SCREEN_W * 4;
+    for (let x = 0; x < SCREEN_W; x += 1) {
+      rgba[row + x * 4 + 3] = 0;
+    }
+  }
+
   if (keep) {
     blitHandOverHole(rgba, keep);
   }
@@ -260,7 +268,7 @@ function blitHandOverHole(rgba: Uint8ClampedArray, keep: WheelHoleKeep): void {
   const keepY = Math.floor(keep.ofs / SCREEN_W);
   for (let ly = 0; ly < keep.height; ly += 1) {
     const y = keepY + ly;
-    if (y < 0 || y >= CLIP_Y) {
+    if (y < 0 || y >= VISIBLE_H) {
       continue;
     }
     for (let lx = 0; lx < keep.width; lx += 1) {
@@ -272,10 +280,12 @@ function blitHandOverHole(rgba: Uint8ClampedArray, keep: WheelHoleKeep): void {
       if (x < 0 || x >= SCREEN_W) {
         continue;
       }
-      const dx = x - HUB_X;
-      const dy = y - HUB_Y;
-      if (dx * dx + dy * dy > HOLE_R * HOLE_R) {
-        continue;
+      if (y < CLIP_Y) {
+        const dx = x - HUB_X;
+        const dy = y - HUB_Y;
+        if (dx * dx + dy * dy > HOLE_R * HOLE_R) {
+          continue;
+        }
       }
       const color = palette[value & 0x0f];
       const i = (y * SCREEN_W + x) * 4;

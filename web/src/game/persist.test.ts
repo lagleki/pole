@@ -12,6 +12,7 @@ import {
   type GameProgressSave,
 } from './persist';
 import { DRUM_NUDGE_X } from './constants';
+import { buildAlphabetSvg, ALPHA_TILE_H, ALPHA_TILE_W, ALPHA_Y } from './svgAlphabet';
 import { buildPegsSvg, buildWheelSvg, punchWheelHole, svgWheelLayout } from './svgWheel';
 import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, wheelSectorLabel } from './tvWheel';
 
@@ -82,6 +83,17 @@ describe('svg wheel', () => {
     expect(svgWheelLayout.holeR).toBeLessThan(svgWheelLayout.radii.x + 4);
   });
 
+  it('emits the 32-letter alphabet strip (DIFF #19)', () => {
+    const svg = buildAlphabetSvg();
+    expect(svg).toContain('id="alpha-row"');
+    expect(svg).toContain('>А</text>');
+    expect(svg).toContain('>Я</text>');
+    expect(svg).toContain('data-idx="31"');
+    expect(ALPHA_Y).toBe(0x14c);
+    expect(ALPHA_TILE_W).toBe(20);
+    expect(ALPHA_TILE_H).toBe(18);
+  });
+
   it('punches a circular hole down to the alphabet row and keeps the hand', () => {
     const rgba = new Uint8ClampedArray(640 * 350 * 4);
     rgba.fill(255);
@@ -98,7 +110,7 @@ describe('svg wheel', () => {
     const hubI = (punchedY * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[hubI]).toBe(0);
     const letterRow = (0x14c * 640 + Math.floor(hub.x)) * 4 + 3;
-    expect(rgba[letterRow]).toBe(255);
+    expect(rgba[letterRow]).toBe(0);
     const handOpaque = (0x13a * 640 + 240) * 4;
     expect(rgba[handOpaque]).toBe(0);
     expect(rgba[handOpaque + 1]).toBe(0);
@@ -106,7 +118,7 @@ describe('svg wheel', () => {
     expect(rgba[handOpaque + 3]).toBe(255);
     const handTransparent = (0x13a * 640 + 241) * 4 + 3;
     expect(rgba[handTransparent]).toBe(0);
-    const outsideDisk = (Math.floor(hub.y) * 640 + Math.floor(hub.x + svgWheelLayout.radii.x + 8)) * 4 + 3;
+    const outsideDisk = ((svgWheelLayout.clipY - 2) * 640 + Math.floor(hub.x + svgWheelLayout.radii.x + 8)) * 4 + 3;
     expect(rgba[outsideDisk]).toBe(255);
   });
 });
