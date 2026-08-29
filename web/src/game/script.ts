@@ -200,6 +200,10 @@ class Game {
   private readonly humanSeats: 1 | 2;
   /** WEB: skip splash/presentation after a localStorage resume (DIFF #20). */
   private skipToTurns = false;
+  /** WEB: resume straight to letter-pick (spin already done). */
+  private resumeAtLetterPick: { awardKind: 'perHit' | 'double' | 'keep'; awardUnit: number } | null = null;
+  /** WEB: resume straight to round-end (word already solved). */
+  private resumeAtRoundWon = false;
 
   constructor(ctx: GameContext) {
     this.humanSeats = ctx.options?.humanSeats ?? 1;
@@ -300,7 +304,7 @@ class Game {
     this.ctx.wheel?.setVisible(false);
   }
 
-  private persistCheckpoint(checkpoint: GameProgressSave['checkpoint']): void {
+  private persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' }): void {
     if (!this.ctx.persist) {
       return;
     }
@@ -332,6 +336,7 @@ class Game {
       opened: [...this.opened],
       theme: this.ctx.state.theme,
       topPlayers: this.ctx.topPlayers.map((row) => ({ ...row })),
+      ...(award !== undefined && { awardKind: award.kind, awardUnit: award.kind === 'perHit' ? award.unit : undefined }),
     });
   }
 
@@ -368,7 +373,11 @@ class Game {
     this.ctx.state.theme = save.theme;
     this.ctx.topPlayers.length = 0;
     this.ctx.topPlayers.push(...save.topPlayers.map((row) => ({ ...row })));
-    this.skipToTurns = save.checkpoint === 'in-round';
+    this.skipToTurns = save.checkpoint === 'in-round' || save.checkpoint === 'letter-pick' || save.checkpoint === 'word-solved';
+    this.resumeAtLetterPick = save.checkpoint === 'letter-pick'
+      ? { awardKind: save.awardKind ?? 'keep', awardUnit: save.awardUnit ?? 0 }
+      : null;
+    this.resumeAtRoundWon = save.checkpoint === 'word-solved';
     this.syncDebug();
   }
 
@@ -1550,6 +1559,22 @@ class Game {
     const seat = this.seats[this.curPlayer];
     const human = this.isHuman(this.curPlayer);
 
+    // WEB: resume straight to letter-pick if spin was already done before reload.
+    if (this.resumeAtLetterPick) {
+      const { awardKind, awardUnit } = this.resumeAtLetterPick;
+      this.resumeAtLetterPick = null;
+      const award: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' } =
+        awardKind === 'perHit' ? { kind: 'perHit', unit: awardUnit } :
+        awardKind === 'double' ? { kind: 'double' } : { kind: 'keep' };
+      const letterIdx = await this.pickLetter();
+      const found = await this.openLetter(letterIdx, 0, award);
+      if (found) {
+        if (human) { this.movesForBox += 1; }
+        return 'again';
+      }
+      return 'next';
+    }
+
     // DOS: box game after 3 successful MOVES, human seats only (deviations #4, #5).
     // WEB: all seats trigger the box game, not just human (DIFF #30).
     if (this.movesForBox > 2) {
@@ -1560,7 +1585,11 @@ class Game {
     if (human) {
       if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Слово!', 'Поехали!')) === 0) {
         const result = await this.tellWord();
-        return result === 'won' ? 'won' : 'next';
+        if (result === 'won') {
+          this.persistCheckpoint('word-solved');
+          return 'won';
+        }
+        return 'next';
       }
     }
 
@@ -1622,6 +1651,7 @@ class Game {
       }
     }
 
+    this.persistCheckpoint('letter-pick', award);
     const letterIdx = await this.pickLetter();
     const found = await this.openLetter(letterIdx, 0, award);
     if (found) {
@@ -1804,39 +1834,46 @@ class Game {
         this.movesForBox = 0;
       }
       this.skipToTurns = false;
-      let roundWon = false;
       let allRemoved = false;
 
-      // Turn loop (dpr:1120-1515).
-      while (this.remaindLetters > 0) {
-        this.persistCheckpoint('in-round');
-        const outcome = await this.takeTurn();
-        if (outcome === 'won') {
-          roundWon = true;
-          break;
-        }
-        if (this.remaindLetters > 0) {
+      if (this.resumeAtRoundWon) {
+        // Restored from 'word-solved' checkpoint: word already named, skip turn
+        // loop and round-end ceremony — winner is already set from applyResume.
+        this.resumeAtRoundWon = false;
+      } else {
+        let roundWon = false;
+
+        // Turn loop (dpr:1120-1515).
+        while (this.remaindLetters > 0) {
           this.persistCheckpoint('in-round');
-        }
-        if (outcome === 'next') {
-          if (!(await this.nextPlayer())) {
-            allRemoved = true;
+          const outcome = await this.takeTurn();
+          if (outcome === 'won') {
+            roundWon = true;
             break;
           }
-          this.persistCheckpoint('in-round');
+          if (this.remaindLetters > 0) {
+            this.persistCheckpoint('in-round');
+          }
+          if (outcome === 'next') {
+            if (!(await this.nextPlayer())) {
+              allRemoved = true;
+              break;
+            }
+            this.persistCheckpoint('in-round');
+          }
+          this.syncDebug();
         }
-        this.syncDebug();
-      }
 
-      if (!allRemoved) {
-        this.setScene('round-end');
-        this.playSfx('winnerTour');
-        if (!roundWon) {
-          // Word completed letter-by-letter: current player wins (dpr:1515-1518).
+        if (!allRemoved) {
+          this.setScene('round-end');
+          this.playSfx('winnerTour');
+          if (!roundWon) {
+            // Word completed letter-by-letter: current player wins (dpr:1515-1518).
+          }
+          await this.yakubovichTalk(this.playerName(this.curPlayer), 'выиграл раунд!');
+          await this.waitKey(1000);
+          this.winner = this.curPlayer;
         }
-        await this.yakubovichTalk(this.playerName(this.curPlayer), 'выиграл раунд!');
-        await this.waitKey(1000);
-        this.winner = this.curPlayer;
       }
 
       await this.adware();

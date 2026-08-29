@@ -21,8 +21,13 @@ export interface CharacterSave {
 
 export interface GameProgressSave {
   version: typeof PROGRESS_VERSION;
-  /** in-round: resume at the current word/turn. between-rounds: next stage setup. */
-  checkpoint: 'in-round' | 'between-rounds';
+  /**
+   * in-round: resume at the start of the current player's turn.
+   * letter-pick: resume just before the letter-pick prompt (spin already done).
+   * word-solved: resume after the player correctly named the word (round-end pending).
+   * between-rounds: resume at next stage setup.
+   */
+  checkpoint: 'in-round' | 'letter-pick' | 'word-solved' | 'between-rounds';
   rngState: number;
   humanSeats: 1 | 2;
   charId: number;
@@ -41,6 +46,10 @@ export interface GameProgressSave {
   opened: boolean[];
   theme: string;
   topPlayers: TopPlayerRecord[];
+  /** letter-pick only: award to apply when the letter is found. */
+  awardKind?: 'perHit' | 'double' | 'keep';
+  /** letter-pick + awardKind==='perHit' only: points per hit. */
+  awardUnit?: number;
 }
 
 export interface UiPrefs {
@@ -55,7 +64,8 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
   const v = value as GameProgressSave;
   if (
     v.version !== PROGRESS_VERSION ||
-    (v.checkpoint !== 'in-round' && v.checkpoint !== 'between-rounds') ||
+    (v.checkpoint !== 'in-round' && v.checkpoint !== 'letter-pick' &&
+     v.checkpoint !== 'word-solved' && v.checkpoint !== 'between-rounds') ||
     typeof v.rngState !== 'number' ||
     (v.humanSeats !== 1 && v.humanSeats !== 2) ||
     !Array.isArray(v.seats) ||
@@ -73,7 +83,7 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
   ) {
     return false;
   }
-  if (v.checkpoint === 'in-round' && v.guessedWord.length === 0) {
+  if ((v.checkpoint === 'in-round' || v.checkpoint === 'letter-pick' || v.checkpoint === 'word-solved') && v.guessedWord.length === 0) {
     return false;
   }
   return true;
