@@ -19,6 +19,7 @@ import {
 } from './constants';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import type { AlphabetView } from './svgAlphabet';
+import type { HudView, SpriteBox } from './svgHud';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
@@ -140,6 +141,8 @@ export interface GameContext {
   wheel?: WheelView;
   /** SVG alphabet strip (DIFF #19). */
   alphabet?: AlphabetView;
+  /** SVG nameplates and speech bubbles (DIFF #19). */
+  hud?: HudView;
   /** localStorage checkpoint (DIFF #20). */
   persist?: {
     save(snapshot: GameProgressSave): void;
@@ -302,11 +305,14 @@ class Game {
     this.ctx.wheel?.setFrame(a);
     this.ctx.wheel?.setVisible(true);
     this.syncAlphabet(true);
+    this.syncHud(true);
   }
 
   private hideWheel(): void {
     this.ctx.wheel?.setVisible(false);
     this.ctx.alphabet?.setVisible(false);
+    this.ctx.hud?.setVisible(false);
+    this.ctx.hud?.hideBubbles();
   }
 
   private syncAlphabet(visible = true): void {
@@ -316,6 +322,38 @@ class Game {
     }
     alphabet.setAvailable(this.available);
     alphabet.setVisible(visible);
+  }
+
+  private syncHud(visible = true, blink?: { seat: number; on: boolean }): void {
+    const hud = this.ctx.hud;
+    if (!hud) {
+      return;
+    }
+    hud.setSeats(
+      this.seats.map((seat, i) => ({
+        caption: liveSeat(i).caption,
+        name: decodeCp866(seat.nameBytes),
+        present: seat.spriteId !== null || this.ctx.state.scene === 'presentation',
+      })),
+      blink,
+    );
+    hud.setVisible(visible);
+  }
+
+  private spriteBox(seatIdx: number, poseWidth?: number): SpriteBox {
+    const layout = liveSeat(seatIdx);
+    const spriteId = this.seats[seatIdx].spriteId ?? SPRITE.PLAYER;
+    const spr = this.screen.getSprite(spriteId);
+    return {
+      x: layout.spriteOfs % SCREEN_W,
+      y: Math.floor(layout.spriteOfs / SCREEN_W),
+      w: poseWidth ?? spr?.width ?? 87,
+      h: spr?.height ?? 83,
+    };
+  }
+
+  private talkSide(seatIdx: number): 'west' | 'east' {
+    return seatIdx === 1 ? 'east' : 'west';
   }
 
   private persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' }): void {
@@ -494,15 +532,20 @@ class Game {
     for (let j = 0; j <= 2; j += 1) {
       const seat = this.seats[j];
       const layout = liveSeat(j);
-      s.fillRect(layout.labelOfs - 641, 30, 110, 0);
-      s.fillRect(layout.labelOfs, 28, 108, 7);
-      s.print(layout.caption, layout.labelOfs + 14, 0, 14, 8);
+      if (!this.ctx.hud) {
+        s.fillRect(layout.labelOfs - 641, 30, 110, 0);
+        s.fillRect(layout.labelOfs, 28, 108, 7);
+        s.print(layout.caption, layout.labelOfs + 14, 0, 14, 8);
+      }
       if (seat.spriteId !== null) {
         s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
-        s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
+        if (!this.ctx.hud) {
+          s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
+        }
         this.paintScore(j);
       }
     }
+    this.syncHud(true);
   }
 
   private redrawRestoredRound(): void {
@@ -617,6 +660,13 @@ class Game {
    * human a bubble too) — callers guard on isHuman.
    */
   private async playerTalk(bubbleOfs: number, text: string): Promise<void> {
+    const hud = this.ctx.hud;
+    if (hud) {
+      hud.showTalk(this.spriteBox(this.curPlayer), text, this.talkSide(this.curPlayer));
+      await this.waitKey(1000);
+      hud.hideBubbles();
+      return;
+    }
     const s = this.screen;
     s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
     s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
@@ -641,11 +691,15 @@ class Game {
     const text = n === 0 ? `Буква ${letterChar}` : `${n}-я буква`;
     const speech = this.speakLetterChoice(letterChar, n);
     if (!this.isHuman(this.curPlayer)) {
-      const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
-      const s = this.screen;
-      s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
-      s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
-      s.print(text, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(text) << 2), 0, 14, 8);
+      if (this.ctx.hud) {
+        this.ctx.hud.showTalk(this.spriteBox(this.curPlayer), text, this.talkSide(this.curPlayer));
+      } else {
+        const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
+        const s = this.screen;
+        s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
+        s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
+        s.print(text, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(text) << 2), 0, 14, 8);
+      }
     }
     return speech;
   }
@@ -657,8 +711,12 @@ class Game {
       await this.waitKey(1000);
     }
     if (!this.isHuman(this.curPlayer)) {
-      const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
-      this.screen.screenCopy(84, 39, bubbleOfs, BACKBUF2);
+      if (this.ctx.hud) {
+        this.ctx.hud.hideBubbles();
+      } else {
+        const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
+        this.screen.screenCopy(84, 39, bubbleOfs, BACKBUF2);
+      }
     }
   }
 
@@ -745,14 +803,18 @@ class Game {
     const pairOfs = seatIdx === 1 ? talkBubbleOfs - 20 * SCREEN_W : talkBubbleOfs;
     const rightBubble = pairOfs + bubbleW + bubbleGap;
 
-    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, BACKBUF2, pairOfs);
-    // WEB: two yellow player bubbles instead of the DOS Snickers wrappers.
     const leftText = phrase0.length > 0 ? phrase0 : label1;
     const rightText = phrase1.length > 0 ? phrase1 : label2;
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, pairOfs, 2);
-    s.print(leftText, pairOfs + 8 * SCREEN_W + 44 - (this.len(leftText) << 2), 0, 14, 8);
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, rightBubble, 2);
-    s.print(rightText, rightBubble + 8 * SCREEN_W + 44 - (this.len(rightText) << 2), 0, 14, 8);
+    const hud = this.ctx.hud;
+    if (hud) {
+      hud.showChoice(this.spriteBox(seatIdx, 99), leftText, rightText);
+    } else {
+      s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, BACKBUF2, pairOfs);
+      s.drawSprite(SPRITE.SPEECH_BUBBLE2, pairOfs, 2);
+      s.print(leftText, pairOfs + 8 * SCREEN_W + 44 - (this.len(leftText) << 2), 0, 14, 8);
+      s.drawSprite(SPRITE.SPEECH_BUBBLE2, rightBubble, 2);
+      s.print(rightText, rightBubble + 8 * SCREEN_W + 44 - (this.len(rightText) << 2), 0, 14, 8);
+    }
 
     let result = 0;
     if (this.isHuman(seatIdx)) {
@@ -783,7 +845,11 @@ class Game {
       result = forced ?? this.random(2);
     }
 
-    s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, pairOfs, BACKBUF2);
+    if (hud) {
+      hud.hideBubbles();
+    } else {
+      s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, pairOfs, BACKBUF2);
+    }
     await this.yakubovichSetSilent();
     // DOS: deviation #10 — the human player did not speak.
     if (!this.isHuman(seatIdx)) {
@@ -992,14 +1058,22 @@ class Game {
     for (let j = 0; j <= 2; j += 1) {
       const seat = this.seats[j];
       const layout = liveSeat(j);
-      s.fillRect(layout.labelOfs - 641, 30, 110, 0);
-      s.fillRect(layout.labelOfs, 28, 108, 7);
+      const hud = this.ctx.hud;
+      if (!hud) {
+        s.fillRect(layout.labelOfs - 641, 30, 110, 0);
+        s.fillRect(layout.labelOfs, 28, 108, 7);
+      }
       for (let i = 3; i >= 0; i -= 1) {
-        s.print(layout.caption, layout.labelOfs + 14, (i & 1) * 7, 14, 8);
+        if (hud) {
+          this.syncHud(true, { seat: j, on: (i & 1) === 1 });
+        } else {
+          s.print(layout.caption, layout.labelOfs + 14, (i & 1) * 7, 14, 8);
+        }
         await this.m.audio.sound(i * 10 + 100, 20);
         await this.delay(120);
       }
       await this.m.audio.sound(50, 100);
+      this.syncHud(true);
 
       if (j !== this.winner) {
         seat.nameBytes = new Uint8Array(0);
@@ -1019,7 +1093,9 @@ class Game {
             input.waitEnter(INFINITE),
           ]);
           input.endTextEntry();
-          s.fillRect(layout.labelOfs + SCREEN_W * 14, 14, 80, 7);
+          if (!this.ctx.hud) {
+            s.fillRect(layout.labelOfs + SCREEN_W * 14, 14, 80, 7);
+          }
           seat.nameBytes = new Uint8Array(entry.bytes);
         }
         if (seat.nameBytes.length === 0) {
@@ -1041,7 +1117,9 @@ class Game {
       if (seat.spriteId !== null) {
         s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
       }
-      s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
+      if (!this.ctx.hud) {
+        s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
+      }
       this.drawFortuneWheel(this.curSector);
       await this.updateMoney(j, 0);
       this.syncDebug();
@@ -1210,7 +1288,9 @@ class Game {
     this.seats[this.curPlayer].spriteId = null;
     s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
     s.fillRect(layout.spriteOfs, 83, 87, 7);
-    s.fillRect(layout.labelOfs - 641, 30, 110, 7);
+    if (!this.ctx.hud) {
+      s.fillRect(layout.labelOfs - 641, 30, 110, 7);
+    }
     this.drawFortuneWheel(this.curSector);
     this.syncDebug();
   }

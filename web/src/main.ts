@@ -22,6 +22,7 @@ import {
   saveProgress,
 } from './game/persist';
 import { mountSvgAlphabet } from './game/svgAlphabet';
+import { mountSvgHud } from './game/svgHud';
 import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
@@ -74,9 +75,11 @@ app.innerHTML = `
       <div class="crt-frame">
         <div class="screen-stack">
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
+          <div id="plate-overlay" class="plate-overlay" hidden></div>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
           <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
+          <div id="hud-overlay" class="hud-overlay" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button" hidden>
             Коснитесь экрана, чтобы включить звук
           </button>
@@ -166,8 +169,10 @@ function requireElement<T extends Element>(selector: string): T {
 
 const canvas = requireElement<HTMLCanvasElement>('#screen');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
+const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
+const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
 const tabAdminBtn = requireElement<HTMLButtonElement>('#tab-admin');
@@ -195,6 +200,7 @@ const hostSpeechLive = requireElement<HTMLParagraphElement>('#host-speech');
 
 const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
+const svgHud = mountSvgHud(plateOverlay, hudOverlay);
 
 // ------------------------------------------------------------ session state
 
@@ -462,6 +468,7 @@ async function gameLoop(): Promise<void> {
         options: { humanSeats },
         wheel: svgWheel,
         alphabet: svgAlphabet,
+        hud: svgHud,
         persist: persistEnabled
           ? { save: saveProgress, clear: clearProgress }
           : undefined,
@@ -480,6 +487,8 @@ async function gameLoop(): Promise<void> {
       presenter.stop();
       svgWheel.setVisible(false);
       svgAlphabet.setVisible(false);
+      svgHud.setVisible(false);
+      svgHud.hideBubbles();
       currentRun = null;
     }
     summarizeState();

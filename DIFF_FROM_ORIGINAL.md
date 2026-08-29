@@ -140,7 +140,12 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     The canvas sits above the SVG with a circular hole so the drum tucks
     under the letters (players and name plates stay behind the disk) while
     the letter-pick hand stays on top. The alphabet row is the same SVG stack
-    (32 tiles, 20×18, y = 332), not the DOS LETTER_BACK sprites. The hub is 8 px left of the DOS cell
+    (32 tiles, 20×18, y = 332), not the DOS LETTER_BACK sprites. Seat captions,
+    names and player speech bubbles are SVG as well: a two-option prompt is two
+    clouds inside the sprite box (tails inward), vertically centered on the sprite.
+    Name plates sit in an SVG layer above the canvas, clipped by the drum disk
+    so they tuck under the wheel without punching black holes in the framebuffer.
+    The hub is 8 px left of the DOS cell
     center. Seat 1 (2-ой игрок) is 4 px left and 24 px up; seat 2’s sprite
     stays 24 px right, its nameplate 8 px right so it sits under the sprite.
 27. **Studio entrance greeting.** Entering the hall no longer uses the DOS

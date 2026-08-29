@@ -13,6 +13,7 @@ import {
 } from './persist';
 import { DRUM_NUDGE_X } from './constants';
 import { buildAlphabetSvg, ALPHA_TILE_H, ALPHA_TILE_W, ALPHA_Y } from './svgAlphabet';
+import { buildHudSvg, choiceBubbleLayout } from './svgHud';
 import { buildPegsSvg, buildWheelSvg, punchWheelHole, svgWheelLayout } from './svgWheel';
 import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, wheelSectorLabel } from './tvWheel';
 
@@ -92,6 +93,20 @@ describe('svg wheel', () => {
     expect(ALPHA_Y).toBe(0x14c);
     expect(ALPHA_TILE_W).toBe(20);
     expect(ALPHA_TILE_H).toBe(18);
+  });
+
+  it('emits seat plaques and centers a two-bubble choice on the sprite', () => {
+    const svg = buildHudSvg();
+    expect(svg).toContain('id="hud-plates"');
+    expect(svg).toContain('id="plate-under-drum"');
+    expect(svg).not.toContain('id="hud-bubbles"');
+    expect(svg).toContain('data-seat="2"');
+    const box = { x: 200, y: 100, w: 87, h: 83 };
+    const layout = choiceBubbleLayout(box);
+    expect(layout.y).toBe(box.y + box.h / 2 - layout.h / 2);
+    expect(layout.leftX).toBeGreaterThanOrEqual(box.x);
+    expect(layout.rightX + layout.w).toBeLessThanOrEqual(box.x + box.w);
+    expect(layout.leftX + layout.w).toBeLessThanOrEqual(layout.rightX);
   });
 
   it('punches a circular hole down to the alphabet row and keeps the hand', () => {

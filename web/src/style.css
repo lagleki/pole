@@ -188,7 +188,7 @@ body::after {
 .audio-gate {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -285,6 +285,49 @@ body::after {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.plate-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+
+.plate-overlay[hidden] {
+  display: none;
+}
+
+.plate-overlay svg,
+.hud-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.hud-overlay[hidden] {
+  display: none;
+}
+
+.hud-plate.is-empty {
+  opacity: 0;
+}
+
+.hud-plate.is-blink .hud-caption {
+  fill: #aaaaaa;
 }
 
 .alpha-lift {
