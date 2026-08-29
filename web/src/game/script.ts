@@ -1752,7 +1752,7 @@ class Game {
    * dpr:1501-1514. Returns false when every seat is removed (→ adware path).
    */
   private async nextPlayer(): Promise<boolean> {
-    await this.waitKey(2000);
+    // await this.waitKey(2000);
     await this.yakubovichSetSilent();
     this.movesForBox = 0;
     const start = this.curPlayer;
