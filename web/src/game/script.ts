@@ -1306,39 +1306,43 @@ class Game {
         startIdx += 1;
       }
       hand.ofs = alphaMin + startIdx * 20;
-      hand.prev = hand.ofs + 20;
+      // prev == ofs on first frame so the initial screenCopy is a no-op.
+      hand.prev = hand.ofs;
 
       let i = startIdx;
       for (;;) {
-        // Skip used cells: find direction from prev→ofs, keep stepping that way.
+        // If input.ts moved us onto a used cell, jump to the nearest available
+        // in the travel direction, erasing every intermediate ghost first.
         let idx = Math.floor((hand.ofs - hand.min) / 20);
         if (this.available[idx] === 0x20) {
-          const dir = hand.ofs >= hand.prev ? 1 : -1;
-          // Search in direction first, then opposite if wall reached.
-          let found = false;
-          for (let d = dir; ; d = -d) {
-            let next = idx + d;
+          // Erase the ghost the engine just drew before we redirect.
+          this.eraseAlphabetHand(hand.ofs);
+          const dir = hand.ofs > hand.prev ? 1 : -1;
+          let next = idx + dir;
+          while (next >= 0 && next < 32 && this.available[next] === 0x20) {
+            next += dir;
+          }
+          // If we hit the wall, try the other direction.
+          if (next < 0 || next >= 32) {
+            next = idx - dir;
             while (next >= 0 && next < 32 && this.available[next] === 0x20) {
-              next += d;
-            }
-            if (next >= 0 && next < 32) {
-              hand.prev = hand.ofs;
-              hand.ofs = hand.min + next * 20;
-              idx = next;
-              found = true;
-              break;
-            }
-            if (d !== dir) {
-              break; // No available letter at all — should not happen.
+              next -= dir;
             }
           }
-          if (!found) {
-            break;
+          if (next < 0 || next >= 32) {
+            break; // No available letter — should not happen.
           }
+          hand.prev = hand.ofs;
+          hand.ofs = hand.min + next * 20;
+          idx = next;
         }
         i = idx;
-        s.screenCopy(15, 26, hand.prev, BACKBUF + hand.prev);
+        // Erase previous hand position, draw at current.
+        if (hand.prev !== hand.ofs) {
+          this.eraseAlphabetHand(hand.prev);
+        }
         s.drawSprite(SPRITE.HAND, hand.ofs, 2);
+        hand.prev = hand.ofs;
         if (input.pollKeyPressed()) {
           this.dismissAlphabetPick(i, hand.ofs, hand.prev);
           return i;

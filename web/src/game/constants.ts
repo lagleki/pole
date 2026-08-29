@@ -75,8 +75,8 @@ export const SEATS: readonly SeatSpec[] = [
 
 /** DIFF #26: studio layout vs the DOS cell so the TV drum does not cover plates. */
 export const DRUM_NUDGE_X = -8;
-/** 1-ый игрок: money stack shifted right so it clears the drum. */
-export const SEAT0_MONEY_NUDGE_X = 32;
+/** 1-ый игрок: money stack shifted left. */
+export const SEAT0_MONEY_NUDGE_X = -16;
 /** 2-ой игрок: left a little; sit lower so the plaque is not under the hub. */
 export const SEAT1_NUDGE_X = -4;
 export const SEAT1_NUDGE_Y = -24;
