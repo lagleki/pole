@@ -1072,7 +1072,7 @@ class Game {
     const { talkBubbleOfs } = liveSeat(this.curPlayer);
     const areaOfs = talkBubbleOfs - 60 * SCREEN_W - 32;
 
-    await this.yakubovichTalk('За 3 буквы ПРЕМИЯ!', 'Внесите шкатулки!');
+    await this.yakubovichTalk('Три правильно угаданные буквы дают вам право на две шкатулки. Две шкатулки в студию!', '');
     s.screenCopy(104, 121, BACKBUF + areaOfs, areaOfs);
 
     let k = 61;
@@ -1112,7 +1112,7 @@ class Game {
       }
     }
     await this.yakubovichSetSilent();
-    await this.yakubovichTalk('Где деньги?', 'Выбирайте!');
+    await this.yakubovichTalk('Какую вам шкатулку? Левую-правую, правую-левую?', '');
     const choice = await this.playerDecision('', '', 'Левая', 'Правая');
     await this.yakubovichSetSilent();
     s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
@@ -1595,7 +1595,7 @@ class Game {
       }
       case 'x2': {
         this.playSfx('sectorX2');
-        await this.yakubovichTalk('Деньги удваиваются!', 'Назовите букву!');
+        await this.yakubovichTalk('У вас призовой сектор — все ваши очки умножаются на 2, буква!', '');
         award = { kind: 'double' };
         break;
       }
