@@ -1044,13 +1044,10 @@ class Game {
       for (const line of firstTourGreeting(broadcastWeekday())) {
         await this.yakubovichTalk(line);
       }
-    } else {
-      await this.yakubovichTalk(laterTourGreeting(this.stage));
-    }
-    if (this.stage === 0) {
       await this.yakubovichTalk(firstTourInvite());
     } else {
       await this.delay(2000);
+      await this.yakubovichTalk(laterTourGreeting(this.stage));
       await this.yakubovichTalk(laterTourInvite(this.stage));
     }
   }
