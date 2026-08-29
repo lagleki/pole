@@ -20,44 +20,46 @@ export type TvSector =
 const P = (value: number): TvSector => ({ kind: 'points', value });
 
 /**
- * Clockwise from the arrow (index 0). 28 point sectors and 8 specials:
- * bankrupt×1 (Б), prize×1 (П), plus×1, x2×2, zero×3. No key/chance.
+ * Clockwise from the arrow (index 0). 26 point sectors and 10 specials:
+ * bankrupt×1 (Б), prize×1 (П), plus×2, x2×2, zero×4. No key/chance.
+ * Zeros sit every 9 wedges (0/9/18/27). Plus, ×2 and bankrupt/prize sit in
+ * opposite pairs in the gaps so specials are never adjacent.
  * Same point value never sits on two neighbouring wedges (including wrap).
  */
 export const WHEEL_SECTORS: readonly TvSector[] = [
+  { kind: 'zero' },
   P(500),
-  { kind: 'bankrupt' },
   P(350),
-  P(800),
   { kind: 'plus' },
+  P(800),
   P(650),
+  { kind: 'bankrupt' },
   P(400),
-  { kind: 'prize' },
   P(1000),
-  P(750),
-  { kind: 'x2' },
+  { kind: 'zero' },
   P(450),
   P(850),
-  { kind: 'zero' },
   P(600),
+  { kind: 'x2' },
   P(950),
   P(400),
   P(700),
   P(500),
-  P(350),
   { kind: 'zero' },
+  P(350),
   P(800),
+  { kind: 'plus' },
   P(650),
   P(750),
-  P(400),
+  { kind: 'prize' },
   P(1000),
-  { kind: 'x2' },
   P(500),
+  { kind: 'zero' },
   P(450),
   P(700),
   P(850),
+  { kind: 'x2' },
   P(600),
-  { kind: 'zero' },
   P(950),
   P(700),
   P(750),

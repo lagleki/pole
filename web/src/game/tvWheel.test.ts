@@ -19,19 +19,31 @@ describe('TV 36-sector drum (DIFF #26)', () => {
   it('has 36 sectors and every listed point value twice', () => {
     expect(WHEEL_SECTORS).toHaveLength(WHEEL_SECTOR_COUNT);
     const points = WHEEL_SECTORS.filter((s) => s.kind === 'points');
-    expect(points).toHaveLength(28);
+    expect(points).toHaveLength(26);
     for (const value of TV_POINT_VALUES) {
       expect(points.filter((s) => s.value === value).length).toBeGreaterThanOrEqual(2);
     }
   });
 
-  it('includes one bankrupt, one prize, one plus, and several zeros', () => {
+  it('includes one bankrupt, one prize, two plus, two x2, and four zeros', () => {
     const kinds = WHEEL_SECTORS.map((s) => s.kind);
     expect(kinds.filter((k) => k === 'bankrupt')).toHaveLength(1);
     expect(kinds.filter((k) => k === 'prize')).toHaveLength(1);
-    expect(kinds.filter((k) => k === 'plus')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'plus')).toHaveLength(2);
     expect(kinds.filter((k) => k === 'x2')).toHaveLength(2);
-    expect(kinds.filter((k) => k === 'zero').length).toBeGreaterThan(1);
+    expect(kinds.filter((k) => k === 'zero')).toHaveLength(4);
+  });
+
+  it('spaces zeros every 9 wedges and never sits two specials next to each other', () => {
+    const zeros = WHEEL_SECTORS.map((s, i) => (s.kind === 'zero' ? i : -1)).filter((i) => i >= 0);
+    expect(zeros).toEqual([0, 9, 18, 27]);
+    for (let i = 0; i < WHEEL_SECTORS.length; i += 1) {
+      const a = WHEEL_SECTORS[i];
+      const b = WHEEL_SECTORS[(i + 1) % WHEEL_SECTORS.length];
+      if (a.kind !== 'points' && b.kind !== 'points') {
+        expect.fail(`specials adjacent at ${i} and ${(i + 1) % WHEEL_SECTORS.length}`);
+      }
+    }
   });
 
   it('never places the same point value on neighbouring wedges', () => {

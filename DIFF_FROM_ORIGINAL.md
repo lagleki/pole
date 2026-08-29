@@ -127,7 +127,7 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     (DIFF #21) is unchanged. Playwright skips audible samples.
 26. **Classic 36-sector TV drum.** Live play no longer uses the DOS 16 wedges
     / 32 half-steps.     The SVG wheel has 36 sectors: point values 350–1000
-    plus one Банкрот (Б), one Приз (П), one Плюс, ×2×2 and several Ноль. No Ключ or Шанс. A correct
+    plus one Банкрот (Б), one Приз (П), two Плюс, ×2×2 and four Ноль. No Ключ or Шанс. A correct
     letter on a point sector adds value × number of hits. ×2 doubles the
     score if the letter is present. Neighbouring wedges never share the same
     point value. The SVG rotates opposite the sector index so the arrow, the
