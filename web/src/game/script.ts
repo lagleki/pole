@@ -1046,7 +1046,7 @@ class Game {
       }
       await this.yakubovichTalk(firstTourInvite());
     } else {
-      await this.delay(2000);
+      await this.delay(4000);
       await this.yakubovichTalk(laterTourGreeting(this.stage));
       await this.yakubovichTalk(laterTourInvite(this.stage));
     }
