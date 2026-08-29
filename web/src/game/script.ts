@@ -40,7 +40,7 @@ const MALE_A_YA_NAMES = new Set(['илья', 'никита', 'савва', 'фо
 const LETTER_NAMES: Record<string, string> = {
   'А': 'А', 'Б': 'Бэ', 'В': 'Вэ', 'Г': 'Гэ', 'Д': 'Дэ',
   'Е': 'Е', 'Ж': 'Жэ', 'З': 'Зэ', 'И': 'И', 'Й': 'И краткое',
-  'К': 'Ка', 'Л': 'Эль', 'М': 'Эм. Михаил', 'Н': 'Эн. Николай', 'О': 'О. Олег',
+  'К': 'Ка', 'Л': 'Эль', 'М': 'Эм. Михаил', 'Н': 'Эн. Николай', 'О': '"О" - Олег',
   'П': 'Пэ', 'Р': 'Эр', 'С': 'Эс', 'Т': 'Тэ', 'У': 'У',
   'Ф': 'Эф', 'Х': 'Ха', 'Ц': 'Цэ', 'Ч': 'Чэ', 'Ш': 'Ша',
   'Щ': 'Ща', 'Ъ': 'Твёрдый знак', 'Ы': 'Ы', 'Ь': 'Мягкий знак',
@@ -65,16 +65,14 @@ export function playerVoiceRole(spriteId: number | null, name: string, human: bo
 }
 
 const MONEY_RECOUNT_TICK_MS = 2;
-const MONEY_RECOUNT_MAX_MS = 3000;
-const MONEY_RECOUNT_MAX_MS_UNDER_10K = 1000;
+const MONEY_RECOUNT_MAX_MS = 1000;
 
-/** How many coins share one original 2 ms tick. <10k → ≤1 s; otherwise ≤3 s. */
+/** How many coins share one original 2 ms tick — capped at 1 s total. */
 export function moneyRecountStride(score: number): number {
   if (score <= 1) {
     return 1;
   }
-  const capMs = score < 10_000 ? MONEY_RECOUNT_MAX_MS_UNDER_10K : MONEY_RECOUNT_MAX_MS;
-  const maxTicks = Math.max(1, Math.floor(capMs / MONEY_RECOUNT_TICK_MS));
+  const maxTicks = Math.max(1, Math.floor(MONEY_RECOUNT_MAX_MS / MONEY_RECOUNT_TICK_MS));
   return Math.max(1, Math.ceil(score / maxTicks));
 }
 
@@ -976,6 +974,7 @@ class Game {
       const invite = firstTourInvite();
       await this.yakubovichTalk(invite[0], invite[1]);
     } else {
+      await this.delay(2000);
       const invite = laterTourInvite(this.stage);
       await this.yakubovichTalk(invite[0], invite[1]);
     }
@@ -1296,23 +1295,53 @@ class Game {
 
     if (this.isHuman(this.curPlayer)) {
       const hand = input.hand;
+      const alphaMin = 0x13a * SCREEN_W;
       hand.step = 20;
-      hand.ofs = 0x13a * SCREEN_W;
-      hand.min = hand.ofs;
-      hand.max = hand.ofs + 31 * 20;
-      hand.prev = hand.min + 20;
-      let i = 0;
+      hand.min = alphaMin;
+      hand.max = alphaMin + 31 * 20;
+
+      // Start on the first available (non-used) letter instead of always А.
+      let startIdx = 0;
+      while (startIdx < 32 && this.available[startIdx] === 0x20) {
+        startIdx += 1;
+      }
+      hand.ofs = alphaMin + startIdx * 20;
+      hand.prev = hand.ofs + 20;
+
+      let i = startIdx;
       for (;;) {
+        // Skip used cells: find direction from prev→ofs, keep stepping that way.
+        let idx = Math.floor((hand.ofs - hand.min) / 20);
+        if (this.available[idx] === 0x20) {
+          const dir = hand.ofs >= hand.prev ? 1 : -1;
+          // Search in direction first, then opposite if wall reached.
+          let found = false;
+          for (let d = dir; ; d = -d) {
+            let next = idx + d;
+            while (next >= 0 && next < 32 && this.available[next] === 0x20) {
+              next += d;
+            }
+            if (next >= 0 && next < 32) {
+              hand.prev = hand.ofs;
+              hand.ofs = hand.min + next * 20;
+              idx = next;
+              found = true;
+              break;
+            }
+            if (d !== dir) {
+              break; // No available letter at all — should not happen.
+            }
+          }
+          if (!found) {
+            break;
+          }
+        }
+        i = idx;
         s.screenCopy(15, 26, hand.prev, BACKBUF + hand.prev);
         s.drawSprite(SPRITE.HAND, hand.ofs, 2);
-        i = Math.floor((hand.ofs - hand.min) / 20);
         if (input.pollKeyPressed()) {
-          if (this.available[i] === 0x20) {
-            await this.m.audio.sound(1000, 32);
-          } else {
-            this.dismissAlphabetPick(i, hand.ofs, hand.prev);
-            return i;
-          }
+          this.dismissAlphabetPick(i, hand.ofs, hand.prev);
+          return i;
         }
         // WEB: yield (original busy-loop).
         await this.delay(10);
