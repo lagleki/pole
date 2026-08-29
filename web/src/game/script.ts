@@ -342,13 +342,11 @@ class Game {
 
   private spriteBox(seatIdx: number, poseWidth?: number): SpriteBox {
     const layout = liveSeat(seatIdx);
-    const spriteId = this.seats[seatIdx].spriteId ?? SPRITE.PLAYER;
-    const spr = this.screen.getSprite(spriteId);
     return {
       x: layout.spriteOfs % SCREEN_W,
       y: Math.floor(layout.spriteOfs / SCREEN_W),
-      w: poseWidth ?? spr?.width ?? 87,
-      h: spr?.height ?? 83,
+      w: poseWidth ?? 87,
+      h: 83,
     };
   }
 
@@ -1658,7 +1656,7 @@ class Game {
 
     await this.yakubovichTalk(this.playerName(this.curPlayer), 'Вращайте барабан!');
     if (human) {
-      if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Слово!', 'Поехали!')) === 0) {
+      if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Скажу слово!', 'Кручу барабан!')) === 0) {
         const result = await this.tellWord();
         if (result === 'won') {
           this.persistCheckpoint('word-solved');
