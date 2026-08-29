@@ -15,7 +15,7 @@ import { DRUM_NUDGE_X } from './constants';
 import { buildAlphabetSvg, ALPHA_TILE_H, ALPHA_TILE_W, ALPHA_Y } from './svgAlphabet';
 import { buildHudSvg, choiceBubbleLayout } from './svgHud';
 import { buildPegsSvg, buildWheelSvg, punchWheelHole, svgWheelLayout } from './svgWheel';
-import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS, wheelSectorLabel } from './tvWheel';
+import { WHEEL_SECTOR_COUNT, WHEEL_SECTORS } from './tvWheel';
 
 function sampleSave(overrides: Partial<GameProgressSave> = {}): GameProgressSave {
   return {
@@ -103,13 +103,17 @@ describe('svg wheel', () => {
     expect(svg).toContain('data-seat="2"');
     const box = { x: 200, y: 100, w: 87, h: 83 };
     const layout = choiceBubbleLayout(box, 'Приз!', 'Деньги.');
-    expect(layout.left.w).toBeGreaterThan(40);
-    expect(layout.left.x + layout.left.w).toBeLessThanOrEqual(640 - 2);
-    expect(layout.right.x).toBeGreaterThanOrEqual(2);
+    expect(layout.left.y).toBe(layout.right.y);
+    expect(layout.left.y + layout.left.h).toBeLessThanOrEqual(box.y);
+    expect(layout.left.w).toBeLessThanOrEqual(640 * 0.1);
+    expect(layout.right.w).toBeLessThanOrEqual(640 * 0.1);
+    expect(layout.left.x + layout.left.w).toBeLessThanOrEqual(layout.right.x);
+    expect(layout.left.x).toBeGreaterThanOrEqual(2);
     expect(layout.right.x + layout.right.w).toBeLessThanOrEqual(640 - 2);
-    const edge = choiceBubbleLayout({ x: 2, y: 10, w: 87, h: 83 }, 'Поехали!', 'Слово!');
+    const edge = choiceBubbleLayout({ x: 2, y: 80, w: 87, h: 83 }, 'Поехали!', 'Слово!');
     expect(edge.left.x).toBeGreaterThanOrEqual(2);
     expect(edge.right.x + edge.right.w).toBeLessThanOrEqual(640);
+    expect(edge.left.x + edge.left.w).toBeLessThanOrEqual(edge.right.x);
   });
 
   it('punches a circular hole down to the alphabet row and keeps the hand', () => {
