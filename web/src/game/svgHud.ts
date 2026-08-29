@@ -3,16 +3,21 @@
  * Plaques sit behind the drum; talk/choice clouds stay inside the sprite box
  * and the pair is vertically centered on the sprite.
  */
-import { SCREEN_W } from '../engine/types';
+import { SCREEN_W, VISIBLE_H } from '../engine/types';
 import { liveSeat } from './constants';
 import { svgWheelLayout } from './svgWheel';
 
 export const PLATE_W = 108;
 export const PLATE_H = 28;
 export const BUBBLE_H = 34;
-export const BUBBLE_GAP = 4;
-const BUBBLE_PAD = 2;
-const BUBBLE_MIN_W = 36;
+export const BUBBLE_GAP = 6;
+const TAIL_W = 8;
+const TEXT_PAD_X = 10;
+const FONT_SIZE = 11;
+const CHAR_EM = 0.62;
+const SCREEN_PAD = 3;
+/** Bubbles may stick out of the sprite this far, but never off the 640×350 screen. */
+const SPRITE_SLACK = 24;
 
 export interface HudSeat {
   caption: string;
@@ -54,50 +59,93 @@ export function escapeSvgText(text: string): string {
     .replaceAll('"', '&quot;');
 }
 
-function bubbleSize(box: SpriteBox, pair: boolean): { w: number; h: number } {
-  const h = Math.min(BUBBLE_H, Math.max(22, box.h * 0.4));
-  if (pair) {
-    const w = Math.max(BUBBLE_MIN_W, (box.w - BUBBLE_GAP - BUBBLE_PAD * 2) / 2);
-    return { w, h };
+export interface BubbleBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fontSize: number;
+}
+
+export function bubbleForText(text: string): { w: number; h: number; fontSize: number } {
+  let fontSize = FONT_SIZE;
+  const maxW = SCREEN_W - SCREEN_PAD * 2;
+  const body = (fs: number): number => Math.ceil(Math.max(1, text.length) * fs * CHAR_EM) + TEXT_PAD_X * 2;
+  let w = body(fontSize) + TAIL_W;
+  while (w > maxW && fontSize > 8) {
+    fontSize -= 1;
+    w = body(fontSize) + TAIL_W;
   }
-  return { w: Math.max(BUBBLE_MIN_W, box.w * 0.62), h };
+  w = Math.min(Math.max(w, 40), maxW);
+  const h = Math.max(26, fontSize + 18);
+  return { w, h, fontSize };
 }
 
-/** Choice pair stays inside the sprite rect; tails point inward. */
-export function choiceBubbleLayout(box: SpriteBox): { leftX: number; rightX: number; y: number; w: number; h: number } {
-  const { w, h } = bubbleSize(box, true);
-  const y = box.y + box.h / 2 - h / 2;
-  const leftX = box.x + BUBBLE_PAD;
-  const rightX = box.x + box.w - BUBBLE_PAD - w;
-  return { leftX, rightX, y, w, h };
+function clampBubble(x: number, y: number, w: number, h: number): { x: number; y: number } {
+  return {
+    x: Math.max(SCREEN_PAD, Math.min(SCREEN_W - SCREEN_PAD - w, x)),
+    y: Math.max(SCREEN_PAD, Math.min(VISIBLE_H - SCREEN_PAD - h, y)),
+  };
 }
 
-export function talkBubbleLayout(
+function spriteSlackRange(box: SpriteBox, w: number): { min: number; max: number } {
+  return {
+    min: box.x - SPRITE_SLACK,
+    max: box.x + box.w + SPRITE_SLACK - w,
+  };
+}
+
+/** Choice pair: sized to text, vertically centered on the sprite, clamped to the screen. */
+export function choiceBubbleLayout(
   box: SpriteBox,
-  side: 'west' | 'east',
-): { x: number; y: number; w: number; h: number } {
-  const { w, h } = bubbleSize(box, false);
-  const y = box.y + box.h / 2 - h / 2;
-  const x = side === 'west' ? box.x + BUBBLE_PAD : box.x + box.w - BUBBLE_PAD - w;
-  return { x, y, w, h };
+  leftText: string,
+  rightText: string,
+): { left: BubbleBox; right: BubbleBox } {
+  const leftSize = bubbleForText(leftText);
+  const rightSize = bubbleForText(rightText);
+  const h = Math.max(leftSize.h, rightSize.h);
+  const y0 = box.y + box.h / 2 - h / 2;
+  const slack = spriteSlackRange(box, leftSize.w);
+  let leftX = box.x - SPRITE_SLACK;
+  let rightX = box.x + box.w + SPRITE_SLACK - rightSize.w;
+  if (leftX + leftSize.w + BUBBLE_GAP > rightX) {
+    const mid = box.x + box.w / 2;
+    leftX = mid - BUBBLE_GAP / 2 - leftSize.w;
+    rightX = mid + BUBBLE_GAP / 2;
+  }
+  leftX = Math.min(Math.max(leftX, slack.min), slack.max);
+  const rightSlack = spriteSlackRange(box, rightSize.w);
+  rightX = Math.min(Math.max(rightX, rightSlack.min), rightSlack.max);
+  const left = { ...leftSize, h, ...clampBubble(leftX, y0, leftSize.w, h) };
+  const right = { ...rightSize, h, ...clampBubble(rightX, y0, rightSize.w, h) };
+  return { left, right };
 }
 
-function bubbleMarkup(x: number, y: number, w: number, h: number, text: string, tail: 'east' | 'west'): string {
-  const tailW = 7;
-  const bodyW = w - tailW;
+export function talkBubbleLayout(box: SpriteBox, text: string, side: 'west' | 'east'): BubbleBox {
+  const size = bubbleForText(text);
+  const y0 = box.y + box.h / 2 - size.h / 2;
+  const slack = spriteSlackRange(box, size.w);
+  const preferred = side === 'west' ? box.x - SPRITE_SLACK : box.x + box.w + SPRITE_SLACK - size.w;
+  const x0 = Math.min(Math.max(preferred, slack.min), slack.max);
+  return { ...size, ...clampBubble(x0, y0, size.w, size.h) };
+}
+
+function bubbleMarkup(box: BubbleBox, text: string, tail: 'east' | 'west'): string {
+  const tailW = TAIL_W;
+  const bodyW = box.w - tailW;
   const bodyX = tail === 'west' ? tailW : 0;
-  const mid = h / 2;
+  const mid = box.h / 2;
   const tailPts =
     tail === 'east'
-      ? `${bodyW - 1},${mid - 5} ${w},${mid} ${bodyW - 1},${mid + 5}`
+      ? `${bodyW - 1},${mid - 5} ${box.w},${mid} ${bodyW - 1},${mid + 5}`
       : `${tailW + 1},${mid - 5} 0,${mid} ${tailW + 1},${mid + 5}`;
-  const fontSize = w < 48 ? 8 : 10;
-  return `<g class="hud-bubble" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})">
+  return `<g class="hud-bubble" transform="translate(${box.x.toFixed(1)} ${box.y.toFixed(1)})">
       <polygon points="${tailPts}" fill="#ffe566" stroke="#2a2030" stroke-width="0.8"/>
-      <rect x="${bodyX}" y="0.5" width="${bodyW}" height="${h - 1}" rx="7"
+      <rect x="${bodyX}" y="0.5" width="${bodyW}" height="${box.h - 1}" rx="7"
             fill="#ffe566" stroke="#2a2030" stroke-width="0.8"/>
       <text x="${bodyX + bodyW / 2}" y="${mid}" dominant-baseline="central"
-            text-anchor="middle" font-size="${fontSize}">${escapeSvgText(text)}</text>
+            text-anchor="middle" font-size="${box.fontSize}"
+            textLength="${Math.max(8, bodyW - 4)}" lengthAdjust="spacingAndGlyphs">${escapeSvgText(text)}</text>
     </g>`;
 }
 
@@ -170,10 +218,11 @@ export function mountSvgHud(plateHost: HTMLElement, bubbleHost: HTMLElement): Hu
         const present = Boolean(seat?.present);
         plate.classList.toggle('is-empty', !present);
         plate.classList.toggle('is-blink', blink?.seat === i && blink.on);
+        plate.setAttribute('display', present ? 'inline' : 'none');
         const caption = plate.querySelector('.hud-caption');
         const name = plate.querySelector('.hud-name');
         if (caption) {
-          caption.textContent = seat?.caption ?? '';
+          caption.textContent = present ? (seat?.caption ?? '') : '';
         }
         if (name) {
           name.textContent = present ? (seat?.name ?? '') : '';
@@ -181,14 +230,14 @@ export function mountSvgHud(plateHost: HTMLElement, bubbleHost: HTMLElement): Hu
       }
     },
     showTalk(box, text, side): void {
-      const { x, y, w, h } = talkBubbleLayout(box, side);
+      const laid = talkBubbleLayout(box, text, side);
       const tail = side === 'west' ? 'east' : 'west';
-      bubbles.innerHTML = bubbleMarkup(x, y, w, h, text, tail);
+      bubbles.innerHTML = bubbleMarkup(laid, text, tail);
     },
     showChoice(box, left, right): void {
-      const { leftX, rightX, y, w, h } = choiceBubbleLayout(box);
+      const laid = choiceBubbleLayout(box, left, right);
       bubbles.innerHTML =
-        bubbleMarkup(leftX, y, w, h, left, 'east') + bubbleMarkup(rightX, y, w, h, right, 'west');
+        bubbleMarkup(laid.left, left, 'east') + bubbleMarkup(laid.right, right, 'west');
     },
     hideBubbles(): void {
       bubbles.innerHTML = '';

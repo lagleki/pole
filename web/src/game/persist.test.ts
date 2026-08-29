@@ -95,18 +95,21 @@ describe('svg wheel', () => {
     expect(ALPHA_TILE_H).toBe(18);
   });
 
-  it('emits seat plaques and centers a two-bubble choice on the sprite', () => {
+  it('emits seat plaques and sizes choice bubbles to their text within the screen', () => {
     const svg = buildHudSvg();
     expect(svg).toContain('id="hud-plates"');
     expect(svg).toContain('id="plate-under-drum"');
     expect(svg).not.toContain('id="hud-bubbles"');
     expect(svg).toContain('data-seat="2"');
     const box = { x: 200, y: 100, w: 87, h: 83 };
-    const layout = choiceBubbleLayout(box);
-    expect(layout.y).toBe(box.y + box.h / 2 - layout.h / 2);
-    expect(layout.leftX).toBeGreaterThanOrEqual(box.x);
-    expect(layout.rightX + layout.w).toBeLessThanOrEqual(box.x + box.w);
-    expect(layout.leftX + layout.w).toBeLessThanOrEqual(layout.rightX);
+    const layout = choiceBubbleLayout(box, 'Приз!', 'Деньги.');
+    expect(layout.left.w).toBeGreaterThan(40);
+    expect(layout.left.x + layout.left.w).toBeLessThanOrEqual(640 - 2);
+    expect(layout.right.x).toBeGreaterThanOrEqual(2);
+    expect(layout.right.x + layout.right.w).toBeLessThanOrEqual(640 - 2);
+    const edge = choiceBubbleLayout({ x: 2, y: 10, w: 87, h: 83 }, 'Поехали!', 'Слово!');
+    expect(edge.left.x).toBeGreaterThanOrEqual(2);
+    expect(edge.right.x + edge.right.w).toBeLessThanOrEqual(640);
   });
 
   it('punches a circular hole down to the alphabet row and keeps the hand', () => {

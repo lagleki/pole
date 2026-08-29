@@ -204,7 +204,8 @@ class Game {
   private wordPos = 0;
   private opened: boolean[] = [];
   private readonly humanSeats: 1 | 2;
-  /** WEB: skip splash/presentation after a localStorage resume (DIFF #20). */
+  /** WEB: seat whose SVG plaque is being introduced (name not assigned yet). */
+  private hudIntroSeat: number | null = null;
   private skipToTurns = false;
   /** WEB: resume straight to letter-pick (spin already done). */
   private resumeAtLetterPick: { awardKind: 'perHit' | 'double' | 'keep'; awardUnit: number } | null = null;
@@ -333,7 +334,7 @@ class Game {
       this.seats.map((seat, i) => ({
         caption: liveSeat(i).caption,
         name: decodeCp866(seat.nameBytes),
-        present: seat.spriteId !== null || this.ctx.state.scene === 'presentation',
+        present: seat.nameBytes.length > 0 || blink?.seat === i || this.hudIntroSeat === i,
       })),
       blink,
     );
@@ -1010,6 +1011,13 @@ class Game {
     const s = this.screen;
     this.drawBoardChrome();
 
+    for (let i = 0; i <= 2; i += 1) {
+      if (i !== this.winner) {
+        this.seats[i].nameBytes = new Uint8Array(0);
+      }
+    }
+    this.ctx.hud?.hideBubbles();
+
     let j = 332 * SCREEN_W + 31 * 20;
     for (let i = 31; i >= 0; i -= 1) {
       this.available[i] = 0x80 + i;
@@ -1057,6 +1065,11 @@ class Game {
       const seat = this.seats[j];
       const layout = liveSeat(j);
       const hud = this.ctx.hud;
+      this.hudIntroSeat = j;
+      if (j !== this.winner) {
+        seat.nameBytes = new Uint8Array(0);
+        seat.score = 0;
+      }
       if (!hud) {
         s.fillRect(layout.labelOfs - 641, 30, 110, 0);
         s.fillRect(layout.labelOfs, 28, 108, 7);
@@ -1071,11 +1084,9 @@ class Game {
         await this.delay(120);
       }
       await this.m.audio.sound(50, 100);
-      this.syncHud(true);
+      this.syncHud(true, { seat: j, on: false });
 
       if (j !== this.winner) {
-        seat.nameBytes = new Uint8Array(0);
-        seat.score = 0;
         // Seat 0 is never prompted (dpr:1057); in 1-player web mode only
         // seat 1 is, in the original mode seats 1 and 2 both are.
         const prompted = j > 0 && j <= this.humanSeats;
@@ -1120,9 +1131,12 @@ class Game {
       }
       this.drawFortuneWheel(this.curSector);
       await this.updateMoney(j, 0);
+      this.hudIntroSeat = null;
+      this.syncHud(true);
       this.syncDebug();
       await this.delay(500);
     }
+    this.hudIntroSeat = null;
     this.winner = 3;
   }
 
@@ -1284,6 +1298,7 @@ class Game {
     const s = this.screen;
     const layout = liveSeat(this.curPlayer);
     this.seats[this.curPlayer].spriteId = null;
+    this.seats[this.curPlayer].nameBytes = new Uint8Array(0);
     s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
     s.fillRect(layout.spriteOfs, 83, 87, 7);
     if (!this.ctx.hud) {

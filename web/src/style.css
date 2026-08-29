@@ -323,7 +323,7 @@ body::after {
 }
 
 .hud-plate.is-empty {
-  opacity: 0;
+  display: none;
 }
 
 .hud-plate.is-blink .hud-caption {
