@@ -39,6 +39,32 @@ export class Screen implements ScreenApi {
     this.fonts = fonts;
   }
 
+  /**
+   * Save/restore buffer for one movable sprite ("save-behind" idiom).
+   * Call saveBehind() before drawing; restoreBehind() before moving or hiding.
+   * Works anywhere on the framebuffer — no BACKBUF dependency.
+   */
+  private behind: { ofs: number; width: number; height: number; pixels: Uint8Array } | null = null;
+
+  saveBehind(ofs: number, width: number, height: number): void {
+    const pixels = new Uint8Array(width * height);
+    for (let row = 0; row < height; row += 1) {
+      const src = ofs + row * SCREEN_W;
+      pixels.set(this.buffer.subarray(src, src + width), row * width);
+    }
+    this.behind = { ofs, width, height, pixels };
+  }
+
+  restoreBehind(): void {
+    const b = this.behind;
+    if (!b) return;
+    for (let row = 0; row < b.height; row += 1) {
+      const dst = b.ofs + row * SCREEN_W;
+      this.buffer.set(b.pixels.subarray(row * b.width, (row + 1) * b.width), dst);
+    }
+    this.behind = null;
+  }
+
   /** dpr:247-281 — decoded-pixel equivalent of the row-RLE DrawSprite. */
   drawSprite(spriteId: number, ofs: number, transparentColor: number): void {
     const sprite = this.sprites[spriteId];

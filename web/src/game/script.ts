@@ -643,44 +643,9 @@ class Game {
     }
   }
 
-  private alphabetHandOfs(letterIdx: number): number {
-    return 0x13a * SCREEN_W + letterIdx * 20;
-  }
-
-  /** Restore the 15×26 hand stamp from the alphabet BACKBUF strip. */
-  private eraseAlphabetHand(ofs: number): void {
-    this.screen.screenCopy(15, 26, ofs, BACKBUF + ofs);
-  }
-
-  /**
-   * The pick hand sits at 0x13a (26px), the tile at 0x14c (18px). Clearing the
-   * tile leaves the upper 18px of the finger on the alphabet row. Copy that
-   * overhang from the neighbouring cell so BACKBUF (often a plus-pick snapshot
-   * of the word board) cannot stamp a finger ghost.
-   */
-  private wipeAlphabetFinger(letterIdx: number): void {
-    const ofs = this.alphabetHandOfs(letterIdx);
-    const neighbor = letterIdx < 31 ? ofs + 20 : ofs - 20;
-    this.screen.screenCopy(15, 18, ofs, neighbor);
-  }
-
-  /** Instantly blank a used alphabet cell (no linger under the finger). */
+  /** Blank a used alphabet tile cell. */
   private clearAlphabetCell(letterIdx: number): void {
-    this.wipeAlphabetFinger(letterIdx);
     this.screen.fillRect(0x14c * SCREEN_W + letterIdx * 20, 18, 19, 7);
-  }
-
-  /** Hide the pointing hand and drop the chosen tile before the host reacts. */
-  private dismissAlphabetPick(letterIdx: number, handOfs: number, prevOfs?: number): void {
-    const hand = this.m.input.hand;
-    hand.step = 0;
-    this.eraseAlphabetHand(handOfs);
-    if (prevOfs !== undefined && prevOfs !== handOfs) {
-      this.eraseAlphabetHand(prevOfs);
-    }
-    // Whole alphabet strip from the pick-start snapshot, then drop this tile.
-    this.screen.screenCopy(SCREEN_W, 60, 0x59b0 * 8, BACKBUF + 0x59b0 * 8);
-    this.clearAlphabetCell(letterIdx);
   }
 
   /** dpr:1410-1424 — lift the used letter off the alphabet row. */
@@ -830,7 +795,7 @@ class Game {
         return;
       }
     }
-    if (await skipIntro(2000)) {
+    if (await skipIntro(1000)) {
       return;
     }
 
@@ -1276,7 +1241,8 @@ class Game {
     hand.prev = 12 * SCREEN_W + 0xc8;
     let n = 1;
     for (;;) {
-      s.screenCopy(15, 26, hand.prev, BACKBUF + hand.prev);
+      s.restoreBehind();
+      s.saveBehind(hand.ofs, 15, 26);
       s.drawSprite(SPRITE.HAND, hand.ofs, 2);
       n = (hand.ofs - hand.min + 16) >> 4;
       const letterIdx = this.guessedWord[n - 1] - 0x80;
@@ -1290,7 +1256,7 @@ class Game {
       // WEB: the original busy-waits here; yield so the browser can deliver input.
       await this.delay(10);
     }
-    s.screenCopy(15, 26, hand.ofs, BACKBUF + hand.ofs);
+    s.restoreBehind();
     hand.step = 0;
     return n;
   }
@@ -1344,11 +1310,13 @@ class Game {
           idx = next;
         }
         i = idx;
-        // Repaint the alphabet row to erase the previous hand position, then draw hand.
-        this.paintAlphabetRow();
+        s.restoreBehind();
+        s.saveBehind(hand.ofs, 15, 26);
         s.drawSprite(SPRITE.HAND, hand.ofs, 2);
         if (input.pollKeyPressed()) {
-          this.dismissAlphabetPick(i, hand.ofs, hand.prev);
+          s.restoreBehind();
+          hand.step = 0;
+          this.clearAlphabetCell(i);
           return i;
         }
         // WEB: yield (original busy-loop).
@@ -1390,8 +1358,6 @@ class Game {
     this.available[letterIdx] = 0x20;
     this.syncDebug();
 
-    this.m.input.hand.step = 0;
-    this.clearAlphabetCell(letterIdx);
     await this.vanishAlphabetTile(letterIdx);
     // Redraw the full alphabet row so no artefacts remain on the layers below
     // (sprites, name plates) after the tile animation clears the bottom strip.

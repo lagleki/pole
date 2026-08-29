@@ -62,6 +62,14 @@ export interface ScreenApi {
   screenCopy(width: number, height: number, dstOfs: number, srcOfs: number): void;
   /** 3-px-wide grey (color 7) splash line (dpr:403-447). Endpoint gets a single pixel of 7. */
   line(x1: number, y1: number, x2: number, y2: number): void;
+
+  /**
+   * Save/restore buffer for one movable sprite ("save-behind" idiom).
+   * Call saveBehind() before drawing; restoreBehind() before moving or hiding.
+   * Works anywhere on the framebuffer — no BACKBUF dependency.
+   */
+  saveBehind(ofs: number, width: number, height: number): void;
+  restoreBehind(): void;
 }
 
 /** Mutable hand-cursor state; arrow keys move ofs by step within [min, max] (dpr:709-718). */
