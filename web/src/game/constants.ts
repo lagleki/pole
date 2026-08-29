@@ -75,11 +75,14 @@ export const SEATS: readonly SeatSpec[] = [
 
 /** DIFF #26: studio layout vs the DOS cell so the TV drum does not cover plates. */
 export const DRUM_NUDGE_X = -8;
+/** 1-ый игрок: money stack shifted right so it clears the drum. */
+export const SEAT0_MONEY_NUDGE_X = 32;
 /** 2-ой игрок: left a little; sit lower so the plaque is not under the hub. */
 export const SEAT1_NUDGE_X = -4;
 export const SEAT1_NUDGE_Y = -24;
-/** 3-ий игрок sprite stays beside the drum; the plaque sits under the sprite. */
+/** 3-ий игрок: same vertical position as player 2. */
 export const SEAT2_NUDGE_X = 24;
+export const SEAT2_NUDGE_Y = -24;
 export const SEAT2_LABEL_NUDGE_X = 8;
 
 const SCREEN_W = 640;
@@ -90,6 +93,12 @@ function nudgeOfs(ofs: number, dx: number, dy: number): number {
 
 export function liveSeat(index: number): SeatSpec {
   const seat = SEATS[index];
+  if (index === 0) {
+    return {
+      ...seat,
+      moneyOfs: nudgeOfs(seat.moneyOfs, SEAT0_MONEY_NUDGE_X, 0),
+    };
+  }
   if (index === 1) {
     return {
       ...seat,
@@ -102,10 +111,10 @@ export function liveSeat(index: number): SeatSpec {
   if (index === 2) {
     return {
       ...seat,
-      spriteOfs: nudgeOfs(seat.spriteOfs, SEAT2_NUDGE_X, 0),
-      talkBubbleOfs: nudgeOfs(seat.talkBubbleOfs, SEAT2_NUDGE_X, 0),
-      moneyOfs: nudgeOfs(seat.moneyOfs, SEAT2_NUDGE_X, 0),
-      labelOfs: nudgeOfs(seat.labelOfs, SEAT2_LABEL_NUDGE_X, 0),
+      spriteOfs: nudgeOfs(seat.spriteOfs, SEAT2_NUDGE_X, SEAT2_NUDGE_Y),
+      talkBubbleOfs: nudgeOfs(seat.talkBubbleOfs, SEAT2_NUDGE_X, SEAT2_NUDGE_Y),
+      moneyOfs: nudgeOfs(seat.moneyOfs, SEAT2_NUDGE_X, SEAT2_NUDGE_Y),
+      labelOfs: nudgeOfs(seat.labelOfs, SEAT2_LABEL_NUDGE_X, SEAT2_NUDGE_Y),
     };
   }
   return seat;
