@@ -1310,13 +1310,13 @@ class Game {
       hand.prev = hand.ofs;
 
       let i = startIdx;
+      // Track the last position we actually drew the hand on.
+      let drawnOfs = hand.ofs;
       for (;;) {
         // If input.ts moved us onto a used cell, jump to the nearest available
-        // in the travel direction, erasing every intermediate ghost first.
+        // in the travel direction.
         let idx = Math.floor((hand.ofs - hand.min) / 20);
         if (this.available[idx] === 0x20) {
-          // Erase the ghost the engine just drew before we redirect.
-          this.eraseAlphabetHand(hand.ofs);
           const dir = hand.ofs > hand.prev ? 1 : -1;
           let next = idx + dir;
           while (next >= 0 && next < 32 && this.available[next] === 0x20) {
@@ -1337,12 +1337,12 @@ class Game {
           idx = next;
         }
         i = idx;
-        // Erase previous hand position, draw at current.
-        if (hand.prev !== hand.ofs) {
-          this.eraseAlphabetHand(hand.prev);
+        // Erase wherever we last drew the hand, then draw at new position.
+        if (drawnOfs !== hand.ofs) {
+          this.eraseAlphabetHand(drawnOfs);
         }
         s.drawSprite(SPRITE.HAND, hand.ofs, 2);
-        hand.prev = hand.ofs;
+        drawnOfs = hand.ofs;
         if (input.pollKeyPressed()) {
           this.dismissAlphabetPick(i, hand.ofs, hand.prev);
           return i;
