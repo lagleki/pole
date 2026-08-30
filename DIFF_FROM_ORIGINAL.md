@@ -113,7 +113,10 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     stops at the cell's left-edge offset (ASSIST_STAY is 25px, cells are 16px)
     and can overshoot, so she stood a few pixels right of the card. The walk
     target is shifted left by `(25−16)/2` and the last step is clamped so she
-    arrives on that pose without jumping back after stopping.
+    arrives on that pose without jumping back after stopping. WEB also walks
+    her the full screen width (x=0→640) so she eases out from behind the left
+    side wall and exits behind the right, instead of popping in at DOS x=40 /
+    vanishing at x=582.
 24. **Pause before the host replies to a player.** After a letter, a whole-word
     guess, a prize/box choice, Yakubovich waits ~700 ms (Space/click skips)
     before speaking so the player's answer can land. Other host lines are
@@ -160,8 +163,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     overlay stack above the host, not under him on the canvas.
     Studio wallpaper is SVG too: a 12×3 geometric brick grid (three tile
     kinds, seeded RNG as DIFF #15; restore still uses i%3), hanging lamps
-    and side walls as vertical rectangles (DOS 40×139) in front of a
-    full-width soft-gradient back wall — not BRICK*/LAMP/WALL_* blits.
+    and side walls as vertical rectangles (DOS 40×139) in a front overlay so the
+    assistant walks full-width (x=0…640) between the back wall and the side walls —
+    not BRICK*/LAMP/WALL_* blits.
     Шкатулки are the three original BOX_* sprites as an SVG overlay that
     translates in, rather than a screenCopy over the player.
     The hub is 8 px left of the DOS cell

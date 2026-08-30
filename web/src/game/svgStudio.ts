@@ -1,8 +1,8 @@
 /**
  * SVG studio chrome (DIFF #19). Depth, back to front:
  *   1. full-width festive back wall (sky blue + peach/mint swirls + soft brick tiles)
- *   2. assistant walk plane in front of it (dpr start 0x28,0x19)
- *   3. side walls: ordinary vertical rectangles, 90° to the board wall
+ *   2. assistant walk plane (x = 0 … SCREEN_W at y = 25)
+ *   3. side walls in a front overlay so she passes between wall layers
  * Brick kinds still follow DIFF #15 (seeded RNG, restore uses i%3).
  */
 import type { PaletteColor } from '../spec/types';
@@ -48,9 +48,14 @@ export function lampIrradiance(x: number, y: number): number {
   return sum;
 }
 
-/** dpr: assistant walk starts at (0x28, 0x19) = (40, 25). */
-export const ASSIST_WING_X = 40;
+/** Assistant walk row (screen y). Full-width path so she eases past the side walls. */
 export const ASSIST_WALK_Y = 25;
+/** Left edge of the screen — she enters from behind the left side wall. */
+export const ASSIST_WALK_X0 = 0;
+/** Past the right edge — she exits behind the right side wall (sprite is 25px). */
+export const ASSIST_WALK_X1 = SCREEN_W;
+/** @deprecated alias kept for older call sites; wing is no longer inset. */
+export const ASSIST_WING_X = ASSIST_WALK_X0;
 
 /** DOS WALL_LEFT / WALL_RIGHT: 40×139 at y=25. Axis-aligned standing rects. */
 export const WALL_W = 40;
@@ -411,6 +416,16 @@ export function buildStudioSvg(kinds: readonly number[] = restoredBrickKinds()):
         ${bandsMarkup()}
         <g id="studio-bricks" clip-path="url(#studio-back-clip)">${brickUsesMarkup(kinds)}</g>
         <g id="studio-lamps">${LAMP_POS.map((p) => lampMarkup(p.x, p.y)).join('')}</g>
+      </g>
+    </svg>`;
+}
+
+/** Side walls only — mounted above the assistant so she walks behind them. */
+export function buildWallsSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
+      width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs>${wallDefsMarkup()}</defs>
+      <g id="studio-walls-root" display="none">
         ${wallMarkup('left')}
         ${wallMarkup('right')}
       </g>
@@ -474,7 +489,11 @@ export function buildStudioLightSvg(): string {
     </svg>`;
 }
 
-export function mountSvgStudio(host: HTMLElement, lightHost?: HTMLElement): StudioView {
+export function mountSvgStudio(
+  host: HTMLElement,
+  lightHost?: HTMLElement,
+  wallsHost?: HTMLElement,
+): StudioView {
   host.innerHTML = buildStudioSvg();
   host.hidden = true;
   const root = host.querySelector<SVGGElement>('#studio-root');
@@ -493,6 +512,16 @@ export function mountSvgStudio(host: HTMLElement, lightHost?: HTMLElement): Stud
     }
   }
 
+  let wallsRoot: SVGGElement | null = null;
+  if (wallsHost) {
+    wallsHost.innerHTML = buildWallsSvg();
+    wallsHost.hidden = true;
+    wallsRoot = wallsHost.querySelector<SVGGElement>('#studio-walls-root');
+    if (!wallsRoot) {
+      throw new Error('SVG studio walls mount failed');
+    }
+  }
+
   return {
     setVisible(visible: boolean): void {
       if (visible) {
@@ -504,6 +533,10 @@ export function mountSvgStudio(host: HTMLElement, lightHost?: HTMLElement): Stud
       if (lightHost && lightRoot) {
         lightRoot.setAttribute('display', visible ? 'inline' : 'none');
         lightHost.hidden = !visible;
+      }
+      if (wallsHost && wallsRoot) {
+        wallsRoot.setAttribute('display', visible ? 'inline' : 'none');
+        wallsHost.hidden = !visible;
       }
     },
     setBricks(kinds: readonly number[]): void {

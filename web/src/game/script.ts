@@ -28,7 +28,13 @@ import type { YakView } from './svgYakubovich';
 import type { BoxesView } from './svgBoxes';
 import { boxBringIn, boxClosedPair, boxReveal } from './svgBoxes';
 import type { StudioView } from './svgStudio';
-import { BRICK_COUNT, restoredBrickKinds } from './svgStudio';
+import {
+  ASSIST_WALK_X0,
+  ASSIST_WALK_X1,
+  ASSIST_WALK_Y,
+  BRICK_COUNT,
+  restoredBrickKinds,
+} from './svgStudio';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
@@ -1882,7 +1888,7 @@ class Game {
     const stepDelta = [3, 10, 0, 12];
     const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
     let i3 = 0;
-    let walk = 0x19 * SCREEN_W + 0x28;
+    let walk = ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X0;
     const revealed = new Set<number>();
     const assist = this.ctx.assist;
     const syncAssist = (ofs: number, spriteId: number): void => {
@@ -1935,7 +1941,7 @@ class Game {
       if (!assist) {
         s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
       }
-    } while (walk < 0x19 * SCREEN_W + 0x246);
+    } while (walk < ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X1);
     } finally {
       assist?.sync(false, 0, SPRITE.ASSIST_STAY);
     }

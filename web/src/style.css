@@ -459,6 +459,27 @@ body::after {
   height: 100%;
 }
 
+/* Side walls in front of the assistant (she walks between back wall and these). */
+.walls-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.walls-overlay[hidden] {
+  display: none;
+}
+
+.walls-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .boxes-overlay {
   position: absolute;
   inset: 0;

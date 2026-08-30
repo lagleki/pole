@@ -108,6 +108,7 @@ app.innerHTML = `
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
           <div id="hud-overlay" class="hud-overlay" hidden></div>
           <div id="assist-overlay" class="assist-overlay" hidden></div>
+          <div id="walls-overlay" class="walls-overlay" hidden></div>
           <div id="boxes-overlay" class="boxes-overlay" hidden></div>
           <div id="adware-overlay" class="adware-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>
@@ -212,6 +213,7 @@ const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
 const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
 const assistOverlay = requireElement<HTMLDivElement>('#assist-overlay');
+const wallsOverlay = requireElement<HTMLDivElement>('#walls-overlay');
 const handOverlay = requireElement<HTMLDivElement>('#hand-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
@@ -239,7 +241,7 @@ const entryLabel = requireElement<HTMLLabelElement>('#entry-bar .entry-label');
 const hostSpeechLive = requireElement<HTMLParagraphElement>('#host-speech');
 
 const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
-const svgStudio = mountSvgStudio(studioOverlay, studioLightOverlay);
+const svgStudio = mountSvgStudio(studioOverlay, studioLightOverlay, wallsOverlay);
 const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ASSIST_WALK_X0,
+  ASSIST_WALK_X1,
   ASSIST_WALK_Y,
-  ASSIST_WING_X,
   BACK_WALL_H,
   BACK_WALL_Y,
   BRICK_COLS,
@@ -25,6 +26,7 @@ import {
   brickXY,
   buildStudioLightSvg,
   buildStudioSvg,
+  buildWallsSvg,
   lampBulbs,
   lampIrradiance,
   leftWallPoly,
@@ -54,22 +56,23 @@ describe('svg studio', () => {
     expect(BRICK_COLS).toBe(12);
   });
 
-  it('emits geometric bricks, lamps and rectangular side walls', () => {
+  it('emits geometric bricks and lamps; side walls live in a front overlay', () => {
     const svg = buildStudioSvg();
     expect(svg).toContain('id="studio-root"');
     expect(svg).toContain('id="studio-brick-0"');
-    expect(svg).toContain('id="studio-wall-left"');
-    expect(svg).toContain('id="studio-wall-right"');
+    expect(svg).not.toContain('id="studio-wall-left"');
     expect(svg).not.toContain('id="studio-wing-left"');
-    expect(svg).toContain('url(#wall-stone)');
     expect(svg).toContain('url(#brick-blob)');
     expect(svg).toContain('id="studio-swirls"');
     expect(svg).toContain('#ffe0c0');
     expect(svg).toContain('#6a9ee0');
-    expect(svg).not.toContain('wall-lamp-shade');
-    expect(svg).not.toContain('wall-lamp-falloff');
     expect(svg).toContain(`translate(${LAMP_POS[0].x} ${LAMP_POS[0].y})`);
     expect(svg).toContain(`translate(${LAMP_POS[1].x} ${LAMP_POS[1].y})`);
+    const walls = buildWallsSvg();
+    expect(walls).toContain('id="studio-walls-root"');
+    expect(walls).toContain('id="studio-wall-left"');
+    expect(walls).toContain('id="studio-wall-right"');
+    expect(walls).toContain('url(#wall-stone)');
     expect(LAMP_W).toBe(16);
     expect(LAMP_H).toBe(15);
     expect(WALL_W).toBe(40);
@@ -77,10 +80,11 @@ describe('svg studio', () => {
     expect(WALL_Y).toBe(25);
   });
 
-  it('spans the back wall across the full screen width', () => {
+  it('spans the back wall full-width; assistant walks edge to edge behind side walls', () => {
     const back = backWallRect();
     expect(back).toEqual({ x: 0, y: BACK_WALL_Y, w: 640, h: BACK_WALL_H });
-    expect(ASSIST_WING_X).toBe(WALL_W);
+    expect(ASSIST_WALK_X0).toBe(0);
+    expect(ASSIST_WALK_X1).toBe(640);
     expect(ASSIST_WALK_Y).toBe(WALL_Y);
     expect(ASSIST_WALK_Y).toBeGreaterThan(back.y);
     expect(ASSIST_WALK_Y).toBeLessThan(back.y + back.h);
