@@ -7,6 +7,7 @@
  * https://commons.wikimedia.org/wiki/File:Mouse-cursor-hand-pointer.svg
  */
 import { SCREEN_W } from '../engine/types';
+import { setSvgShown } from './svgAssist';
 
 export interface HandView {
   sync(active: boolean, ofs: number): void;
@@ -34,7 +35,7 @@ const HAND_POINTER_PATHS = `<g transform="rotate(180 25.5 12)">
 function buildHandSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
       width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      <g id="hand-cursor" hidden>
+      <g id="hand-cursor" display="none">
         <g id="hand-sprite" transform="translate(0 0)">
           <svg x="0" y="0" width="${HAND_W}" height="${HAND_H}" viewBox="${HAND_VIEWBOX}">
             ${HAND_POINTER_PATHS}
@@ -56,18 +57,18 @@ export function mountSvgHand(host: HTMLElement): HandView {
   return {
     sync(active: boolean, ofs: number): void {
       if (!active) {
-        root.setAttribute('hidden', '');
+        setSvgShown(root, false);
         host.hidden = true;
         return;
       }
       const { x, y } = handXY(ofs);
       sprite.setAttribute('transform', `translate(${x} ${y})`);
-      root.removeAttribute('hidden');
+      setSvgShown(root, true);
       host.hidden = false;
     },
     setVisible(visible: boolean): void {
       if (!visible) {
-        root.setAttribute('hidden', '');
+        setSvgShown(root, false);
         host.hidden = true;
       }
     },

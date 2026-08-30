@@ -13,8 +13,8 @@ public-domain disassembly-based reconstruction. Accepted deviations:
 4. Session-only question editor (explicit OVL export). Mid-game progress
    may be restored from localStorage on reload (DIFF #20); Esc / New game
    still starts a fresh run.
-5. Original assets only for in-game visuals, except the SVG drum overlay
-   (DIFF #19) and the SVG alphabet strip. Audio in the browser is TV-show samples (DIFF #25) plus host
+5. Original assets only for in-game visuals, except the SVG overlays in
+   DIFF #19 (drum, alphabet, board, HUD, studio chrome, шкатулки). Audio in the browser is TV-show samples (DIFF #25) plus host
    TTS (DIFF #21). Never ship custom replacement sprite sheets.
 6. The playable game UI is primary; the admin/editor UI is secondary.
 

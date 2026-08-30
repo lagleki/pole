@@ -91,7 +91,7 @@ export function buildStageRowMarkup(name: string): string {
     .join('');
 }
 
-/** Board panel + raised bezel — studio chrome stays on the canvas. */
+/** Board panel + raised bezel — studio wallpaper is a separate SVG overlay. */
 export function boardPunchRects(): readonly { x: number; y: number; w: number; h: number }[] {
   return [
     { x: BOARD_OUTER.x, y: BOARD_OUTER.y, w: BOARD_OUTER.w, h: BOARD_OUTER.h },

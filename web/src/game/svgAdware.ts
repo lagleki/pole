@@ -6,7 +6,7 @@
 import type { PaletteColor } from '../spec/types';
 import { SCREEN_W } from '../engine/types';
 import { defaultAssetSpec, defaultRenderSpec } from '../spec';
-import { indexedSpriteToSvg } from './svgAssist';
+import { indexedSpriteToSvg, setSvgShown } from './svgAssist';
 import { escapeSvgText } from './svgHud';
 
 export interface AdwareView {
@@ -88,7 +88,7 @@ export function buildAdwareSvg(): string {
           <rect id="adware-clip-rect" x="${ADWARE_DST_X}" y="${y0}" width="${ADWARE_COPY_W}" height="${h0}"/>
         </clipPath>
       </defs>
-      <g id="adware-root" hidden clip-path="url(#adware-clip)"
+      <g id="adware-root" display="none" clip-path="url(#adware-clip)"
          font-family="PT Mono, ui-monospace, monospace" font-size="8" fill="${TEXT_FILL}">
         <g id="adware-card" transform="translate(${ADWARE_DST_X} ${y0})">
           <g id="adware-sprite" transform="translate(${ADWARE_SPRITE_DX} ${ADWARE_SPRITE_DY})"></g>
@@ -124,13 +124,8 @@ export function mountSvgAdware(host: HTMLElement): AdwareView {
       );
     },
     setVisible(visible): void {
-      if (!visible) {
-        root.setAttribute('hidden', '');
-        host.hidden = true;
-        return;
-      }
-      root.removeAttribute('hidden');
-      host.hidden = false;
+      setSvgShown(root, visible);
+      host.hidden = !visible;
     },
     setRise(i): void {
       const y = adwareRiseY(i);

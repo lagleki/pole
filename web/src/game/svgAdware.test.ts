@@ -36,6 +36,7 @@ describe('svg adware plaque', () => {
     expect(first).toEqual({ x: 17, y: 1 });
     const svg = buildAdwareSvg();
     expect(svg).toContain('id="adware-root"');
+    expect(svg).toContain('display="none"');
     expect(svg).toContain('id="adware-clip"');
     expect(svg).toContain('ПОЛЕ ЧУДЕС!');
     expect(svg).toContain('Компьютерная игра');

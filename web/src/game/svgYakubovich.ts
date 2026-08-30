@@ -5,7 +5,7 @@
 import type { PaletteColor } from '../spec/types';
 import { SCREEN_W } from '../engine/types';
 import { defaultAssetSpec } from '../spec';
-import { indexedSpriteToSvg } from './svgAssist';
+import { indexedSpriteToSvg, setSvgShown } from './svgAssist';
 
 export type YakBody = 'passive' | 'active';
 export type YakEyes = 'open' | 'close';
@@ -42,15 +42,15 @@ function buildYakSvg(): string {
   const eyes = ofsXy(YAK_EYES_LOW_OFS);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
       width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      <g id="yak-root" hidden>
+      <g id="yak-root" display="none">
         <g id="yak-base" transform="translate(${base.x} ${base.y})"></g>
         <g id="yak-body" transform="translate(${body.x} ${body.y})">
-          <g class="yak-body-frame" data-pose="passive" hidden></g>
-          <g class="yak-body-frame" data-pose="active" hidden></g>
+          <g class="yak-body-frame" data-pose="passive" display="none"></g>
+          <g class="yak-body-frame" data-pose="active" display="none"></g>
         </g>
         <g id="yak-eyes" transform="translate(${eyes.x} ${eyes.y})">
-          <g class="yak-eyes-frame" data-pose="open" hidden></g>
-          <g class="yak-eyes-frame" data-pose="close" hidden></g>
+          <g class="yak-eyes-frame" data-pose="open" display="none"></g>
+          <g class="yak-eyes-frame" data-pose="close" display="none"></g>
         </g>
       </g>
     </svg>`;
@@ -121,13 +121,8 @@ export function mountSvgYakubovich(host: HTMLElement): YakView {
       }
     },
     setVisible(visible: boolean): void {
-      if (!visible) {
-        root.setAttribute('hidden', '');
-        host.hidden = true;
-        return;
-      }
-      root.removeAttribute('hidden');
-      host.hidden = false;
+      setSvgShown(root, visible);
+      host.hidden = !visible;
     },
     showIdle(): void {
       this.setVisible(true);
@@ -137,21 +132,13 @@ export function mountSvgYakubovich(host: HTMLElement): YakView {
       this.setVisible(true);
       for (const frame of bodyFrames) {
         const pose = frame.getAttribute('data-pose');
-        if (body && pose === body) {
-          frame.removeAttribute('hidden');
-        } else {
-          frame.setAttribute('hidden', '');
-        }
+        setSvgShown(frame, Boolean(body && pose === body));
       }
       const eyeAnchor = eyesHighPos ? eyesHigh : eyesLow;
       eyesGroup.setAttribute('transform', `translate(${eyeAnchor.x} ${eyeAnchor.y})`);
       for (const frame of eyesFrames) {
         const pose = frame.getAttribute('data-pose');
-        if (eyes && pose === eyes) {
-          frame.removeAttribute('hidden');
-        } else {
-          frame.setAttribute('hidden', '');
-        }
+        setSvgShown(frame, Boolean(eyes && pose === eyes));
       }
     },
   };

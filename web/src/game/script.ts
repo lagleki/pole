@@ -25,6 +25,10 @@ import type { AssistView } from './svgAssist';
 import type { HandView } from './svgHand';
 import type { AdwareView } from './svgAdware';
 import type { YakView } from './svgYakubovich';
+import type { BoxesView } from './svgBoxes';
+import { boxBringIn, boxClosedPair, boxReveal } from './svgBoxes';
+import type { StudioView } from './svgStudio';
+import { BRICK_COUNT, restoredBrickKinds } from './svgStudio';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
@@ -158,6 +162,10 @@ export interface GameContext {
   assist?: AssistView;
   /** SVG Yakubovich base + mouth/eyes (DIFF #19). */
   yak?: YakView;
+  /** SVG brick wall, lamps and side columns (DIFF #19). */
+  studio?: StudioView;
+  /** SVG шкатулки over the player (DIFF #19). */
+  boxes?: BoxesView;
   /** SVG commercial-break plaque over the host (DIFF #19). */
   adware?: AdwareView;
   /** SVG alphabet strip (DIFF #19). */
@@ -217,6 +225,8 @@ class Game {
   private curSector = 0;
   private winner = 3;
   private stage = 0;
+  /** DIFF #15 / #19: brick tile kinds for the SVG wallpaper (restore uses i%3). */
+  private brickKinds: number[] = restoredBrickKinds();
   private curPlayer = 0;
   /** DOS: successful MOVES toward the box game (Delphi counted letters; deviation #4). */
   private movesForBox = 0;
@@ -343,6 +353,7 @@ class Game {
     }
     this.ctx.wheel?.setFrame(a);
     this.ctx.wheel?.setVisible(true);
+    this.syncStudio(true);
     this.syncBoard(true);
     this.syncAlphabet(true);
     this.syncHud(true);
@@ -356,6 +367,8 @@ class Game {
     this.ctx.hud?.hideBubbles();
     this.ctx.assist?.setVisible(false);
     this.ctx.yak?.setVisible(false);
+    this.ctx.studio?.setVisible(false);
+    this.ctx.boxes?.setVisible(false);
     this.ctx.adware?.setVisible(false);
   }
 
@@ -371,6 +384,15 @@ class Game {
     board.setStage(this.stage);
     board.setWordBoard(this.wordPos, this.wordBoardCells(undefined, revealedDuringWalk, openBeforeWalk));
     board.setVisible(visible);
+  }
+
+  private syncStudio(visible = true): void {
+    const studio = this.ctx.studio;
+    if (!studio) {
+      return;
+    }
+    studio.setBricks(this.brickKinds);
+    studio.setVisible(visible);
   }
 
   private letterIndexAtAssist(assistOfs: number): number {
@@ -564,18 +586,25 @@ class Game {
     s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
     s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
     s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
-    for (let i = 35; i >= 0; i -= 1) {
-      s.drawSprite(SPRITE.BRICK1 + (i % 3), (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W, 1);
+    this.brickKinds = restoredBrickKinds();
+    if (!this.ctx.studio) {
+      for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
+        s.drawSprite(SPRITE.BRICK1 + (i % 3), (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W, 1);
+      }
+      s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
+      s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
     }
-    s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
-    s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
+    this.syncStudio(true);
   }
 
   private drawBoardChrome(): void {
     const s = this.screen;
     s.fillRect(0x11580, 238, SCREEN_W, 7);
-    s.drawSprite(SPRITE.WALL_LEFT, 25 * SCREEN_W, 7);
-    s.drawSprite(SPRITE.WALL_RIGHT, 600 + 25 * SCREEN_W, 7);
+    if (!this.ctx.studio) {
+      s.drawSprite(SPRITE.WALL_LEFT, 25 * SCREEN_W, 7);
+      s.drawSprite(SPRITE.WALL_RIGHT, 600 + 25 * SCREEN_W, 7);
+    }
+    this.syncStudio(true);
 
     if (this.ctx.board) {
       this.syncBoard(true);
@@ -874,24 +903,19 @@ class Game {
 
   /**
    * DIFF #21: every player replica is spoken (letter, drum/word, prize, box).
-   * DOS / DIFF #11: only NPC seats get a bubble; the human has none.
+   * TTS is fire-and-forget so it overlaps the yellow bubble / next beat;
+   * DOS / DIFF #11: only NPC seats get a bubble (fixed 1 s), the human has none.
    */
   private async playerSay(displayText: string, spokenText = displayText): Promise<void> {
     const spoken = spokenCasing(spokenText);
     if (spoken.length === 0) {
       return;
     }
-    const speech = this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
-    const showBubble = !this.isHuman(this.curPlayer);
-    if (showBubble) {
+    // Start voice without awaiting — bubble pacing must not wait on remote TTS.
+    this.ctx.tts?.speak(spoken, this.currentPlayerVoice());
+    if (!this.isHuman(this.curPlayer)) {
       this.showPlayerBubble(displayText);
-    }
-    if (speech) {
-      await speech.ended;
-    } else if (showBubble) {
       await this.waitKey(1000);
-    }
-    if (showBubble) {
       this.hidePlayerBubble();
     }
   }
@@ -1170,11 +1194,20 @@ class Game {
     s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
     s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
 
-    for (let i = 35; i >= 0; i -= 1) {
-      s.drawSprite(SPRITE.BRICK1 + this.random(3), (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W, 1);
+    const kinds = restoredBrickKinds();
+    for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
+      const kind = this.random(3);
+      kinds[i] = kind;
+      if (!this.ctx.studio) {
+        s.drawSprite(SPRITE.BRICK1 + kind, (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W, 1);
+      }
     }
-    s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
-    s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
+    this.brickKinds = kinds;
+    if (!this.ctx.studio) {
+      s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
+      s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
+    }
+    this.syncStudio(true);
 
     const chars = this.characters;
     for (let i = 100; i >= 0; i -= 1) {
@@ -1438,28 +1471,45 @@ class Game {
     const areaOfs = talkBubbleOfs - 60 * SCREEN_W - 32;
 
     await this.yakubovichTalk('Три правильно угаданные буквы дают вам право на две шкатулки. Две шкатулки в студию!');
-    s.screenCopy(104, 121, BACKBUF + areaOfs, areaOfs);
+    const boxes = this.ctx.boxes;
+    if (!boxes) {
+      s.screenCopy(104, 121, BACKBUF + areaOfs, areaOfs);
+    }
 
     let k = 61;
     let j = talkBubbleOfs + 60 * SCREEN_W;
     for (let i = 30; i >= 0; i -= 1) {
       await this.m.audio.sound(1000 - i * 20, 10, { audible: true });
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-      s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W - 32, 7);
-      s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W + 24, 7);
-      s.drawSprite(SPRITE.BOX_MONEY, j - 60 * SCREEN_W + 26, 7);
-      s.screenCopy(104, k, talkBubbleOfs - 32, BACKBUF + talkBubbleOfs - 32);
-      k -= 2;
-      j -= 1280;
+      if (boxes) {
+        boxes.show(boxBringIn(talkBubbleOfs, 30 - i));
+      } else {
+        s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+        s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W - 32, 7);
+        s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W + 24, 7);
+        s.drawSprite(SPRITE.BOX_MONEY, j - 60 * SCREEN_W + 26, 7);
+        s.screenCopy(104, k, talkBubbleOfs - 32, BACKBUF + talkBubbleOfs - 32);
+        k -= 2;
+        j -= 1280;
+      }
       await this.delay(i);
     }
     await this.waitKey(5000);
 
-    s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+    if (!boxes) {
+      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+    }
     await this.m.audio.sound(1000, 10, { audible: true });
-    s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
+    if (boxes) {
+      boxes.show(boxClosedPair(talkBubbleOfs, false).slice(0, 1));
+    } else {
+      s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
+    }
     await this.m.audio.sound(100, 10, { audible: true });
-    s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
+    if (boxes) {
+      boxes.show(boxClosedPair(talkBubbleOfs, false));
+    } else {
+      s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
+    }
     await this.m.audio.sound(500, 10, { audible: true });
     await this.waitKey(2000);
 
@@ -1467,24 +1517,32 @@ class Game {
     for (let i = k; i >= 0; i -= 1) {
       await this.m.audio.sound(this.random(100) + 50, 10, { audible: true });
       await this.delay(50);
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-      if ((i & 1) === 0) {
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
+      if (boxes) {
+        boxes.show(boxClosedPair(talkBubbleOfs, (i & 1) !== 0));
       } else {
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 36 * SCREEN_W - 6, 7);
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 46 * SCREEN_W + 4, 7);
+        s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+        if ((i & 1) === 0) {
+          s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
+          s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
+        } else {
+          s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 36 * SCREEN_W - 6, 7);
+          s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 46 * SCREEN_W + 4, 7);
+        }
       }
     }
     await this.yakubovichSetSilent();
     await this.yakubovichTalk('Какую вам шкатулку? Левую-правую, правую-левую?');
     const choice = await this.playerDecision('', '', 'Левая', 'Правая');
     await this.yakubovichSetSilent();
-    s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-    s.drawSprite(SPRITE.BOX_OPENED, talkBubbleOfs - 46 * SCREEN_W - 32, 7);
-    s.drawSprite(SPRITE.BOX_OPENED, talkBubbleOfs - 46 * SCREEN_W + 24, 7);
     k &= 1;
-    s.drawSprite(SPRITE.BOX_MONEY, talkBubbleOfs - 60 * SCREEN_W - 30 + 56 * k, 7);
+    if (boxes) {
+      boxes.show(boxReveal(talkBubbleOfs, k === 1));
+    } else {
+      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      s.drawSprite(SPRITE.BOX_OPENED, talkBubbleOfs - 46 * SCREEN_W - 32, 7);
+      s.drawSprite(SPRITE.BOX_OPENED, talkBubbleOfs - 46 * SCREEN_W + 24, 7);
+      s.drawSprite(SPRITE.BOX_MONEY, talkBubbleOfs - 60 * SCREEN_W - 30 + 56 * k, 7);
+    }
     if (choice === k) {
       this.playSfx('boxMoney');
     await this.yakubovichReply('Браво!!! Вы отгадали!');
@@ -1492,13 +1550,21 @@ class Game {
       // DIFF #29: TV-scale purse; DOS awarded 100.
       seat.score += 1000;
       await this.yakubovichSetSilent();
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      if (boxes) {
+        boxes.setVisible(false);
+      } else {
+        s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      }
       await this.updateMoney(this.curPlayer, before);
     } else {
       this.playSfx('boxEmpty');
       await this.yakubovichReply('Увы! Эта шкатулка пуста!');
       await this.yakubovichSetSilent();
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      if (boxes) {
+        boxes.setVisible(false);
+      } else {
+        s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
+      }
       await this.updateMoney(this.curPlayer, seat.score);
     }
     this.movesForBox = 0;

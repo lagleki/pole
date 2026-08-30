@@ -244,6 +244,26 @@ body::after {
   cursor: pointer;
 }
 
+.studio-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.studio-overlay[hidden] {
+  display: none;
+}
+
+.studio-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .wheel-overlay {
   position: absolute;
   inset: 0;
@@ -368,6 +388,7 @@ body::after {
 
 .yak-overlay svg,
 .adware-overlay svg,
+.boxes-overlay svg,
 .plate-overlay svg,
 .hud-overlay svg {
   display: block;
@@ -410,6 +431,26 @@ body::after {
 }
 
 .assist-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.boxes-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+
+.boxes-overlay[hidden] {
+  display: none;
+}
+
+.boxes-overlay svg {
   display: block;
   width: 100%;
   height: 100%;

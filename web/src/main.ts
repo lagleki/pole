@@ -28,6 +28,8 @@ import { mountSvgAssist } from './game/svgAssist';
 import { mountSvgHand } from './game/svgHand';
 import { mountSvgAdware } from './game/svgAdware';
 import { mountSvgYakubovich } from './game/svgYakubovich';
+import { mountSvgBoxes } from './game/svgBoxes';
+import { mountSvgStudio, punchStudioHoles } from './game/svgStudio';
 import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
@@ -91,6 +93,7 @@ app.innerHTML = `
     <section id="play-view" class="play-panel">
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
+          <div id="studio-overlay" class="studio-overlay" hidden></div>
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="plate-overlay" class="plate-overlay" hidden></div>
@@ -100,6 +103,7 @@ app.innerHTML = `
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
           <div id="hud-overlay" class="hud-overlay" hidden></div>
           <div id="assist-overlay" class="assist-overlay" hidden></div>
+          <div id="boxes-overlay" class="boxes-overlay" hidden></div>
           <div id="adware-overlay" class="adware-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button" hidden>
@@ -191,11 +195,13 @@ function requireElement<T extends Element>(selector: string): T {
 
 const canvas = requireElement<HTMLCanvasElement>('#screen');
 const screenStack = requireElement<HTMLDivElement>('#screen-stack');
+const studioOverlay = requireElement<HTMLDivElement>('#studio-overlay');
 const boardOverlay = requireElement<HTMLDivElement>('#board-overlay');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const yakOverlay = requireElement<HTMLDivElement>('#yak-overlay');
 const adwareOverlay = requireElement<HTMLDivElement>('#adware-overlay');
+const boxesOverlay = requireElement<HTMLDivElement>('#boxes-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
 const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
@@ -227,11 +233,13 @@ const entryLabel = requireElement<HTMLLabelElement>('#entry-bar .entry-label');
 const hostSpeechLive = requireElement<HTMLParagraphElement>('#host-speech');
 
 const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
+const svgStudio = mountSvgStudio(studioOverlay);
 const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);
 const svgYak = mountSvgYakubovich(yakOverlay);
 const svgAdware = mountSvgAdware(adwareOverlay);
+const svgBoxes = mountSvgBoxes(boxesOverlay);
 const svgAssist = mountSvgAssist(assistOverlay);
 const svgHand = mountSvgHand(handOverlay);
 
@@ -459,6 +467,7 @@ async function gameLoop(): Promise<void> {
       svgAssist.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
       svgYak.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
       svgAdware.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
+      svgBoxes.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
     }
 
     const presenter = new CanvasPresenter(
@@ -471,6 +480,9 @@ async function gameLoop(): Promise<void> {
         const handActive = hand.step === 16 || hand.step === 20;
         svgHand.sync(handActive, hand.ofs);
 
+        if (!studioOverlay.hidden) {
+          punchStudioHoles(rgba);
+        }
         if (!wheelOverlay.hidden) {
           punchWheelHole(rgba, null);
         }
@@ -499,9 +511,11 @@ async function gameLoop(): Promise<void> {
         state,
         options: { humanSeats },
         wheel: svgWheel,
+        studio: svgStudio,
         board: svgBoard,
         assist: svgAssist,
         yak: svgYak,
+        boxes: svgBoxes,
         adware: svgAdware,
         alphabet: svgAlphabet,
         hud: svgHud,
@@ -523,6 +537,7 @@ async function gameLoop(): Promise<void> {
       gameSfx.stop();
       presenter.stop();
       svgWheel.setVisible(false);
+      svgStudio.setVisible(false);
       svgBoard.setVisible(false);
       svgAlphabet.setVisible(false);
       svgHud.setVisible(false);
@@ -530,6 +545,7 @@ async function gameLoop(): Promise<void> {
       svgHud.setNameEntry(null);
       svgAssist.setVisible(false);
       svgYak.setVisible(false);
+      svgBoxes.setVisible(false);
       svgAdware.setVisible(false);
       svgHand.setVisible(false);
       currentRun = null;

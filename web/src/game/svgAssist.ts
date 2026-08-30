@@ -61,13 +61,25 @@ export function indexedSpriteToSvg(
   return rects.join('');
 }
 
+/**
+ * SVG ignores the HTML `hidden` attribute on `<g>`; use the display
+ * presentation attribute so only one animation frame is visible.
+ */
+export function setSvgShown(el: Element, shown: boolean): void {
+  if (shown) {
+    el.setAttribute('display', 'inline');
+  } else {
+    el.setAttribute('display', 'none');
+  }
+}
+
 function buildAssistSvg(): string {
   const frames = ASSIST_IDS.map(
-    (id) => `<g class="assist-frame" data-sprite="${id}" hidden></g>`,
+    (id) => `<g class="assist-frame" data-sprite="${id}" display="none"></g>`,
   ).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
       width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      <g id="assist-sprite" hidden>${frames}</g>
+      <g id="assist-sprite" display="none">${frames}</g>
     </svg>`;
 }
 
@@ -99,26 +111,22 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
     },
     sync(active, ofs, spriteId): void {
       if (!active) {
-        root.setAttribute('hidden', '');
+        setSvgShown(root, false);
         host.hidden = true;
         return;
       }
       const { x, y } = assistXY(ofs);
       root.setAttribute('transform', `translate(${x} ${y})`);
-      root.removeAttribute('hidden');
+      setSvgShown(root, true);
       host.hidden = false;
       for (const frame of frames) {
         const id = Number(frame.getAttribute('data-sprite'));
-        if (id === spriteId) {
-          frame.removeAttribute('hidden');
-        } else {
-          frame.setAttribute('hidden', '');
-        }
+        setSvgShown(frame, id === spriteId);
       }
     },
     setVisible(visible: boolean): void {
       if (!visible) {
-        root.setAttribute('hidden', '');
+        setSvgShown(root, false);
         host.hidden = true;
       }
     },
