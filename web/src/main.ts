@@ -5,7 +5,7 @@ import { parseOvl, tourQuestionsFromJson, type OvlFile, type OvlQuestion, type T
 import { picFromJson, type PicJson, type TopPlayerRecord } from './assets/pic';
 import { cp866Length, decodeCp866 } from './encoding/cp866';
 import { PwmAudio, WebAudioOutput } from './engine/audio';
-import { createGameSfx } from './engine/sfx';
+import { createGameSfx, PLAYERS_ENTER_VOLUME } from './engine/sfx';
 import { GameInput } from './engine/input';
 import { BorlandRng } from './engine/rng';
 import { CanvasPresenter, Screen } from './engine/screen';
@@ -387,7 +387,7 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-async function gameLoop(): Promise<void> {
+async function gameLoop(roundMusicStarted = false): Promise<void> {
   for (;;) {
     while (sessionQuestions.length === 0) {
       await sleep(500);
@@ -508,6 +508,7 @@ async function gameLoop(): Promise<void> {
           ? { save: saveProgress, clear: clearProgress }
           : undefined,
         resume: resume ?? undefined,
+        roundMusicStarted,
         tts: hostTts,
         sfx: gameSfx,
       });
@@ -545,11 +546,11 @@ function skipAudioGate(): boolean {
   return Boolean(typeof navigator !== 'undefined' && navigator.webdriver) || speedFactor !== 1;
 }
 
-async function waitForAudioGesture(): Promise<void> {
+async function waitForAudioGesture(): Promise<boolean> {
   if (skipAudioGate()) {
     unlockAudio();
     await Promise.all([hostTts.prime(), gameSfx.prime()]);
-    return;
+    return false;
   }
   audioGate.hidden = false;
   await new Promise<void>((resolve) => {
@@ -567,6 +568,12 @@ async function waitForAudioGesture(): Promise<void> {
     audioGate.addEventListener('click', go);
   });
   await Promise.all([hostTts.prime(), gameSfx.prime()]);
+  const resume = persistEnabled ? loadProgress() : null;
+  if (resume?.checkpoint === 'between-rounds' && soundEnabled) {
+    gameSfx.play('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
+    return true;
+  }
+  return false;
 }
 
 function toggleFullscreen(): void {
@@ -961,7 +968,7 @@ async function loadBundledAssets(): Promise<void> {
 
   if (!assetsReady) {
     assetsReady = true;
-    void waitForAudioGesture().then(() => gameLoop());
+    void waitForAudioGesture().then((roundMusicStarted) => gameLoop(roundMusicStarted));
   } else {
     abortCurrentRun('assets-reloaded');
   }

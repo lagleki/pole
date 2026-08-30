@@ -164,6 +164,8 @@ export interface GameContext {
   tts?: HostTts;
   /** TV-show samples (DIFF #25). Tests omit this and keep PWM. */
   sfx?: GameSfx;
+  /** main.ts already started playersEnter on the audio-gate gesture (between-rounds resume). */
+  roundMusicStarted?: boolean;
 }
 
 interface Seat {
@@ -1107,7 +1109,12 @@ class Game {
     this.seats[0].spriteId = saved;
     this.stopSfx('opening');
     this.stopSfx('openingOld');
-    this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
+    if (this.resumingBetweenRounds) {
+      await this.ctx.sfx?.prime();
+    }
+    if (!this.ctx.roundMusicStarted) {
+      this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
+    }
     // WEB DIFF #27: TV studio open (Wikiquote catchphrase + calendar weekday).
     if (this.stage === 0) {
       for (const line of firstTourGreeting(broadcastWeekday())) {
@@ -1393,8 +1400,15 @@ class Game {
     }
 
     const typed = new Uint8Array(entry.bytes);
-    const match = typed.length === this.guessedWord.length && typed.every((b, idx) => b === this.guessedWord[idx]);
+    const match = typed.length === this.guessedWord.length
+      && typed.every((b, idx) => b === this.guessedWord[idx]);
     if (match) {
+      for (let i = 0; i < this.guessedWord.length; i += 1) {
+        this.opened[i] = true;
+      }
+      this.remaindLetters = 0;
+      this.syncBoard(true);
+      this.paintWordBoard();
       this.playSfx('wordCorrect');
       const word = decodeCp866(this.guessedWord);
       await this.yakubovichReply(`${word}. Ну конечно!`);
