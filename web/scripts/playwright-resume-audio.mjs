@@ -230,7 +230,7 @@ async function captureResumeAudioFlow() {
         pass: !(await gate.isVisible()),
       },
       {
-        name: 'between-rounds-resume-at-stage-setup',
+        name: 'new-round-resume-at-stage-1-setup',
         pass: Boolean(stageSetup?.game?.scene === 'stage-setup' && stageSetup.game.stage === 1),
       },
       {
@@ -238,7 +238,7 @@ async function captureResumeAudioFlow() {
         pass: Boolean(finalAudio?.sfxPrimed),
       },
       {
-        name: 'players-enter-playing-after-resume',
+        name: 'players-enter-playing-on-new-round-resume',
         pass: Boolean(audioPlaying),
       },
       {

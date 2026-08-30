@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { TopPlayerRecord } from '../assets/pic';
 import { PwmAudio, SilentOutput } from '../engine/audio';
+import type { GameSfx, SfxId } from '../engine/sfx';
 import { GameInput } from '../engine/input';
 import { BorlandRng } from '../engine/rng';
 import { Screen } from '../engine/screen';
 import { VirtualClock } from '../engine/timing';
 import type { Machine } from '../engine/types';
+import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import { createDebugState, runGame, type GameContext, type Scene } from './script';
 import { fonts, lib, ovl, pic } from './testAssets';
 
@@ -214,4 +216,83 @@ describe('full game script (headless, virtual time, real assets)', () => {
     expect(seats[0].name.length).toBeGreaterThan(0);
     expect(seats[2].name.length).toBeGreaterThan(0);
   }, 60_000);
+
+  it('new-round resume (between-rounds): checkpoint before music, then playersEnter', async () => {
+    const h = buildHarness(42, 1);
+    const timeline: string[] = [];
+
+    const sfx: GameSfx = {
+      play(id: SfxId) {
+        timeline.push(`play:${id}`);
+      },
+      stop(id) {
+        timeline.push(id ? `stop:${id}` : 'stop');
+      },
+      setVolume() {},
+      async prime() {},
+      warmup() {},
+      retryPending() {},
+      isPrimed: () => true,
+      getTrackState: () => ({
+        primed: true,
+        pending: false,
+        paused: true,
+        currentTime: 0,
+        volume: 0,
+      }),
+    };
+    h.ctx.sfx = sfx;
+    h.ctx.persist = {
+      save(snapshot: GameProgressSave) {
+        timeline.push(`save:${snapshot.checkpoint}:stage${snapshot.stage}`);
+      },
+      clear() {},
+    };
+    h.ctx.resume = {
+      version: PROGRESS_VERSION,
+      checkpoint: 'between-rounds',
+      rngState: 42,
+      humanSeats: 1,
+      charId: 2,
+      characters: [{ spriteId: 51, name: 'КРОЛИК' }],
+      seats: [
+        { spriteId: 17, nameBytes: [0x88, 0x83, 0x90, 0x8e, 0x8a], score: 15 },
+        { spriteId: 51, nameBytes: [0x90, 0x8e, 0x92, 0x84], score: 0 },
+        { spriteId: null, nameBytes: [], score: 5 },
+      ],
+      available: Array.from({ length: 32 }, (_, i) => (i === 0 ? 0x20 : 0x80 + i)),
+      curSector: 6,
+      winner: 3,
+      stage: 1,
+      curPlayer: 0,
+      movesForBox: 1,
+      prevWords: [3, -1, -1, -1, -1, -1, -1, -1],
+      guessedWord: [],
+      remaindLetters: 0,
+      wordPos: 121,
+      opened: [],
+      theme: 'ТЕМА',
+      topPlayers: [{ name: 'ТЕСТ', score: 10 }],
+    };
+
+    await driveFullGame(
+      h,
+      6000,
+      () => h.ctx.state.scene === 'presentation' || h.ctx.state.scene === 'word-select',
+    );
+
+    expect(h.sceneHistory).not.toContain('splash');
+    expect(h.sceneHistory).toContain('stage-setup');
+    expect(h.ctx.state.stage).toBe(1);
+
+    const saveIdx = timeline.indexOf('save:between-rounds:stage1');
+    const stingIdx = timeline.indexOf('play:sting');
+    const enterIdx = timeline.indexOf('play:playersEnter');
+    expect(saveIdx).toBeGreaterThanOrEqual(0);
+    expect(stingIdx).toBeGreaterThanOrEqual(0);
+    expect(enterIdx).toBeGreaterThanOrEqual(0);
+    expect(saveIdx).toBeLessThan(stingIdx);
+    expect(saveIdx).toBeLessThan(enterIdx);
+    expect(stingIdx).toBeLessThan(enterIdx);
+  }, 30_000);
 });

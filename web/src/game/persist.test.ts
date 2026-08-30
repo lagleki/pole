@@ -162,6 +162,17 @@ describe('progress persistence', () => {
     expect(isProgressSave({ version: 1 })).toBe(false);
   });
 
+  it('accepts after-spin and letter-open anti-cheat checkpoints', () => {
+    expect(isProgressSave(sampleSave({ checkpoint: 'after-spin' }))).toBe(true);
+    expect(isProgressSave(sampleSave({
+      checkpoint: 'letter-open',
+      awardKind: 'perHit',
+      awardUnit: 10,
+      pickedLetterIdx: 5,
+    }))).toBe(true);
+    expect(isProgressSave(sampleSave({ checkpoint: 'letter-open' }))).toBe(false);
+  });
+
   it('stores sound and player-mode prefs separately', () => {
     const storage = new MemoryStorage();
     savePrefs({ soundEnabled: true, humanSeats: 2 }, storage);

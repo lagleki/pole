@@ -484,7 +484,12 @@ async function captureSmokeFlow() {
         return;
       }
       const failure = request.failure();
-      consoleErrors.push(`requestfailed: ${request.url()} ${failure?.errorText ?? ''}`.trim());
+      const err = failure?.errorText ?? '';
+      // HTMLAudio pause/restart and page teardown cancel in-flight mp3 fetches.
+      if ((/ERR_ABORTED/i.test(err) || err === 'net::ERR_ABORTED') && request.url().includes('/assets/sfx/')) {
+        return;
+      }
+      consoleErrors.push(`requestfailed: ${request.url()} ${err}`.trim());
     });
 
     await page.goto(`${baseUrl}/?fast=${FAST}`, { waitUntil: 'domcontentloaded' });

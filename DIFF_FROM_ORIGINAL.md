@@ -74,10 +74,13 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
 20. **Mid-game localStorage resume (PWA reloads).** A checkpoint is written
     at stable turn/stage boundaries (`pole-chudes-2:progress`). Reloading the
     page (or reopening the installed web app) continues the current round or
-    the next stage. Esc, «Новая игра» and a player-mode change discard the
-    save, as in DIFF #1. Sound and 1P/2P prefs live in `pole-chudes-2:prefs`.
-    Seeded/`?fast=` runs do not read or write storage (smoke stays deterministic).
-    Question-editor edits remain session-only with explicit OVL download.
+    the next stage. `between-rounds` is written again at the start of
+    `stageSetup` (before round-start music), so a reload re-runs setup and
+    plays the intro bed after the audio gate. Esc, «Новая игра» and a
+    player-mode change discard the save, as in DIFF #1. Sound and 1P/2P prefs
+    live in `pole-chudes-2:prefs`. Seeded/`?fast=` runs do not read or write
+    storage (smoke stays deterministic). Question-editor edits remain
+    session-only with explicit OVL download.
 21. **Host TTS.** Yakubovich no longer prints a speech bubble or the round
     theme on the DOS surface — those lines go through the browser Speech
     Synthesis API (`ru-RU` on every utterance, including Android `ru_RU` voices). The PWM 7-burst

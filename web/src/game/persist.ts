@@ -23,11 +23,13 @@ export interface GameProgressSave {
   version: typeof PROGRESS_VERSION;
   /**
    * in-round: resume at the start of the current player's turn.
+   * after-spin: resume after the drum stopped (sector outcome pending; no re-spin).
    * letter-pick: resume just before the letter-pick prompt (spin already done).
+   * letter-open: resume with the letter already chosen (openLetter pending).
    * word-solved: resume after the player correctly named the word (round-end pending).
-   * between-rounds: resume at next stage setup.
+   * between-rounds: resume at next stage setup (saved before round-start music).
    */
-  checkpoint: 'in-round' | 'letter-pick' | 'word-solved' | 'between-rounds';
+  checkpoint: 'in-round' | 'after-spin' | 'letter-pick' | 'letter-open' | 'word-solved' | 'between-rounds';
   rngState: number;
   humanSeats: 1 | 2;
   charId: number;
@@ -46,10 +48,14 @@ export interface GameProgressSave {
   opened: boolean[];
   theme: string;
   topPlayers: TopPlayerRecord[];
-  /** letter-pick only: award to apply when the letter is found. */
+  /** letter-pick / letter-open: award to apply when the letter is found. */
   awardKind?: 'perHit' | 'double' | 'keep';
-  /** letter-pick + awardKind==='perHit' only: points per hit. */
+  /** letter-pick / letter-open + awardKind==='perHit' only: points per hit. */
   awardUnit?: number;
+  /** letter-open: alphabet index 0..31 already chosen. */
+  pickedLetterIdx?: number;
+  /** letter-open from ПЛЮС: 1-based word position (openLetter `n`). */
+  plusPosition?: number;
 }
 
 export interface UiPrefs {
@@ -64,7 +70,8 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
   const v = value as GameProgressSave;
   if (
     v.version !== PROGRESS_VERSION ||
-    (v.checkpoint !== 'in-round' && v.checkpoint !== 'letter-pick' &&
+    (v.checkpoint !== 'in-round' && v.checkpoint !== 'after-spin' &&
+     v.checkpoint !== 'letter-pick' && v.checkpoint !== 'letter-open' &&
      v.checkpoint !== 'word-solved' && v.checkpoint !== 'between-rounds') ||
     typeof v.rngState !== 'number' ||
     (v.humanSeats !== 1 && v.humanSeats !== 2) ||
@@ -83,8 +90,18 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
   ) {
     return false;
   }
-  if ((v.checkpoint === 'in-round' || v.checkpoint === 'letter-pick' || v.checkpoint === 'word-solved') && v.guessedWord.length === 0) {
+  if (
+    (v.checkpoint === 'in-round' || v.checkpoint === 'after-spin' ||
+      v.checkpoint === 'letter-pick' || v.checkpoint === 'letter-open' ||
+      v.checkpoint === 'word-solved') &&
+    v.guessedWord.length === 0
+  ) {
     return false;
+  }
+  if (v.checkpoint === 'letter-open') {
+    if (typeof v.pickedLetterIdx !== 'number' || v.pickedLetterIdx < 0 || v.pickedLetterIdx > 31) {
+      return false;
+    }
   }
   return true;
 }

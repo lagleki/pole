@@ -222,6 +222,15 @@ class Game {
   private skipToTurns = false;
   /** WEB: resume straight to letter-pick (spin already done). */
   private resumeAtLetterPick: { awardKind: 'perHit' | 'double' | 'keep'; awardUnit: number } | null = null;
+  /** WEB: resume with letter already chosen (no re-pick / re-spin). */
+  private resumeAtLetterOpen: {
+    awardKind: 'perHit' | 'double' | 'keep';
+    awardUnit: number;
+    letterIdx: number;
+    plusPosition: number;
+  } | null = null;
+  /** WEB: resume after drum stop — apply sector without spinning again. */
+  private resumeAfterSpin = false;
   /** WEB: resume straight to round-end (word already solved). */
   private resumeAtRoundWon = false;
   /** WEB: between-rounds reload — keep seat names/scores, skip re-presentation. */
@@ -420,7 +429,11 @@ class Game {
     return seatIdx === 1 ? 'east' : 'west';
   }
 
-  private persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' }): void {
+  private persistCheckpoint(
+    checkpoint: GameProgressSave['checkpoint'],
+    award?: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' },
+    pick?: { letterIdx: number; plusPosition?: number },
+  ): void {
     if (!this.ctx.persist) {
       return;
     }
@@ -453,6 +466,10 @@ class Game {
       theme: this.ctx.state.theme,
       topPlayers: this.ctx.topPlayers.map((row) => ({ ...row })),
       ...(award !== undefined && { awardKind: award.kind, awardUnit: award.kind === 'perHit' ? award.unit : undefined }),
+      ...(pick !== undefined && {
+        pickedLetterIdx: pick.letterIdx,
+        ...(pick.plusPosition !== undefined && { plusPosition: pick.plusPosition }),
+      }),
     });
   }
 
@@ -492,9 +509,23 @@ class Game {
     this.ctx.state.theme = save.theme;
     this.ctx.topPlayers.length = 0;
     this.ctx.topPlayers.push(...save.topPlayers.map((row) => ({ ...row })));
-    this.skipToTurns = save.checkpoint === 'in-round' || save.checkpoint === 'letter-pick' || save.checkpoint === 'word-solved';
+    this.skipToTurns =
+      save.checkpoint === 'in-round' ||
+      save.checkpoint === 'after-spin' ||
+      save.checkpoint === 'letter-pick' ||
+      save.checkpoint === 'letter-open' ||
+      save.checkpoint === 'word-solved';
+    this.resumeAfterSpin = save.checkpoint === 'after-spin';
     this.resumeAtLetterPick = save.checkpoint === 'letter-pick'
       ? { awardKind: save.awardKind ?? 'keep', awardUnit: save.awardUnit ?? 0 }
+      : null;
+    this.resumeAtLetterOpen = save.checkpoint === 'letter-open'
+      ? {
+          awardKind: save.awardKind ?? 'keep',
+          awardUnit: save.awardUnit ?? 0,
+          letterIdx: save.pickedLetterIdx ?? 0,
+          plusPosition: save.plusPosition ?? 0,
+        }
       : null;
     this.resumeAtRoundWon = save.checkpoint === 'word-solved';
     this.resumingBetweenRounds = save.checkpoint === 'between-rounds';
@@ -1075,12 +1106,19 @@ class Game {
   /** dpr:990-1037 */
   private async stageSetup(): Promise<void> {
     this.setScene('stage-setup');
-    if (this.stage === 7) {
-      this.playSfx('superGame');
-      this.playSfx('super60s');
-    } else if (this.stage > 0) {
-      this.playSfx('sting');
+    // DIFF #20: checkpoint before round-start music. A reload then re-enters
+    // stageSetup and plays the bed again (after the audio gate), instead of
+    // restoring into a moment that already "used" the cue.
+    // Skip stage 0 first entry — seats have no names yet; between-rounds would
+    // skip the presentation prompts via presentationFromSave.
+    if (
+      this.resumingBetweenRounds ||
+      this.stage > 0 ||
+      this.seats.some((seat) => seat.nameBytes.length > 0)
+    ) {
+      this.persistCheckpoint('between-rounds');
     }
+
     const s = this.screen;
     this.drawBoardChrome();
 
@@ -1113,6 +1151,13 @@ class Game {
     this.seats[0].spriteId = saved;
     this.stopSfx('opening');
     this.stopSfx('openingOld');
+    // Music only after the between-rounds save and studio chrome are in place.
+    if (this.stage === 7) {
+      this.playSfx('superGame');
+      this.playSfx('super60s');
+    } else if (this.stage > 0) {
+      this.playSfx('sting');
+    }
     this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
     // WEB DIFF #27: TV studio open (Wikiquote catchphrase + calendar weekday).
     if (this.stage === 0) {
@@ -1405,8 +1450,9 @@ class Game {
       this.syncBoard(true);
       this.paintWordBoard();
       this.playSfx('wordCorrect');
-      const word = decodeCp866(this.guessedWord);
-      await this.yakubovichReply(`${word}. Ну конечно!`);
+      // Two lines so spokenCasing title-cases the ALL-CAPS bank word (a single
+      // `"WORD. Ну конечно!"` string stays shouty and TTS spells letters).
+      await this.yakubovichReply(decodeCp866(this.guessedWord), 'Ну конечно!');
       await this.waitKey(2500);
       await this.yakubovichSetSilent();
       return 'won';
@@ -1810,14 +1856,32 @@ class Game {
     const seat = this.seats[this.curPlayer];
     const human = this.isHuman(this.curPlayer);
 
+    const toAward = (
+      awardKind: 'perHit' | 'double' | 'keep',
+      awardUnit: number,
+    ): { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' } =>
+      awardKind === 'perHit' ? { kind: 'perHit', unit: awardUnit } :
+      awardKind === 'double' ? { kind: 'double' } : { kind: 'keep' };
+
+    // WEB: letter already chosen — finish opening without re-spin / re-pick.
+    if (this.resumeAtLetterOpen) {
+      const { awardKind, awardUnit, letterIdx, plusPosition } = this.resumeAtLetterOpen;
+      this.resumeAtLetterOpen = null;
+      const found = await this.openLetter(letterIdx, plusPosition, toAward(awardKind, awardUnit));
+      if (found) {
+        if (human) { this.movesForBox += 1; }
+        return 'again';
+      }
+      return 'next';
+    }
+
     // WEB: resume straight to letter-pick if spin was already done before reload.
     if (this.resumeAtLetterPick) {
       const { awardKind, awardUnit } = this.resumeAtLetterPick;
       this.resumeAtLetterPick = null;
-      const award: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' } =
-        awardKind === 'perHit' ? { kind: 'perHit', unit: awardUnit } :
-        awardKind === 'double' ? { kind: 'double' } : { kind: 'keep' };
+      const award = toAward(awardKind, awardUnit);
       const letterIdx = await this.pickLetter();
+      this.persistCheckpoint('letter-open', award, { letterIdx });
       const found = await this.openLetter(letterIdx, 0, award);
       if (found) {
         if (human) { this.movesForBox += 1; }
@@ -1826,27 +1890,34 @@ class Game {
       return 'next';
     }
 
-    // DOS: box game after 3 successful MOVES, human seats only (deviations #4, #5).
-    // WEB: all seats trigger the box game, not just human (DIFF #30).
-    if (this.movesForBox > 2) {
-      await this.boxGame();
-    }
+    const skipSpin = this.resumeAfterSpin;
+    this.resumeAfterSpin = false;
 
-    await this.yakubovichTalk(this.playerName(this.curPlayer), 'Вращайте барабан!');
-    if (human) {
-      if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Скажу слово!', 'Кручу барабан!')) === 0) {
-        const result = await this.tellWord();
-        if (result === 'won') {
-          this.winner = this.curPlayer;
-          this.persistCheckpoint('word-solved');
-          return 'won';
-        }
-        return 'next';
+    if (!skipSpin) {
+      // DOS: box game after 3 successful MOVES, human seats only (deviations #4, #5).
+      // WEB: all seats trigger the box game, not just human (DIFF #30).
+      if (this.movesForBox > 2) {
+        await this.boxGame();
       }
-    }
 
-    await this.yakubovichSetSilent();
-    await this.spinWheel();
+      await this.yakubovichTalk(this.playerName(this.curPlayer), 'Вращайте барабан!');
+      if (human) {
+        if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Скажу слово!', 'Кручу барабан!')) === 0) {
+          const result = await this.tellWord();
+          if (result === 'won') {
+            this.winner = this.curPlayer;
+            this.persistCheckpoint('word-solved');
+            return 'won';
+          }
+          return 'next';
+        }
+      }
+
+      await this.yakubovichSetSilent();
+      await this.spinWheel();
+      // Anti-cheat: drum result is committed before sector dialogue / letter pick.
+      this.persistCheckpoint('after-spin');
+    }
 
     const landed = WHEEL_SECTORS[this.curSector];
     let award: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' } = { kind: 'keep' };
@@ -1870,6 +1941,7 @@ class Game {
         await this.yakubovichTalk('Сектор плюс! Откройте любую букву!');
         const n = await this.pickPlusPosition();
         const letterIdx = this.guessedWord[n - 1] - 0x80;
+        this.persistCheckpoint('letter-open', { kind: 'keep' }, { letterIdx, plusPosition: n });
         const found = await this.openLetter(letterIdx, n, { kind: 'keep' });
         if (found) {
           if (human) {
@@ -1905,6 +1977,7 @@ class Game {
 
     this.persistCheckpoint('letter-pick', award);
     const letterIdx = await this.pickLetter();
+    this.persistCheckpoint('letter-open', award, { letterIdx });
     const found = await this.openLetter(letterIdx, 0, award);
     if (found) {
       if (human) {
