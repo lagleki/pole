@@ -27,6 +27,7 @@ import type { AdwareView } from './svgAdware';
 import type { YakView } from './svgYakubovich';
 import type { BoxesView } from './svgBoxes';
 import { boxBringIn, boxClosedPair, boxReveal } from './svgBoxes';
+import type { PlayersView } from './svgPlayers';
 import type { StudioView } from './svgStudio';
 import {
   ASSIST_WALK_X0,
@@ -178,6 +179,8 @@ export interface GameContext {
   alphabet?: AlphabetView;
   /** SVG nameplates, money stacks, speech bubbles (DIFF #19). */
   hud?: HudView;
+  /** SVG player / NPC seat sprites + decision lean (DIFF #19). */
+  players?: PlayersView;
   /** localStorage checkpoint (DIFF #20). */
   persist?: {
     save(snapshot: GameProgressSave): void;
@@ -354,7 +357,7 @@ class Game {
     const s = this.screen;
     s.fillRect(0x3030 * 8, 172, 223, 7);
     const seat0 = this.seats[0];
-    if (seat0.spriteId !== null) {
+    if (!this.useSvgPlayers() && seat0.spriteId !== null) {
       s.drawSprite(seat0.spriteId, liveSeat(0).spriteOfs, 2);
     }
     this.ctx.wheel?.setFrame(a);
@@ -363,6 +366,7 @@ class Game {
     this.syncBoard(true);
     this.syncAlphabet(true);
     this.syncHud(true);
+    this.syncPlayers(true);
   }
 
   private hideWheel(): void {
@@ -371,6 +375,7 @@ class Game {
     this.ctx.alphabet?.setVisible(false);
     this.ctx.hud?.setVisible(false);
     this.ctx.hud?.hideBubbles();
+    this.ctx.players?.setVisible(false);
     this.ctx.assist?.setVisible(false);
     this.ctx.yak?.setVisible(false);
     this.ctx.studio?.setVisible(false);
@@ -465,6 +470,42 @@ class Game {
       blink,
     );
     hud.setVisible(visible);
+  }
+
+  private syncPlayers(visible = true): void {
+    const players = this.ctx.players;
+    if (!players || !this.useSvgPlayers()) {
+      return;
+    }
+    if (!visible) {
+      players.setVisible(false);
+      return;
+    }
+    players.sync(
+      this.seats.map((seat, i) => ({
+        spriteId: seat.spriteId,
+        ofs: liveSeat(i).spriteOfs,
+      })),
+    );
+  }
+
+  /** Studio stack only — prize/splash keep framebuffer seat blits. */
+  private useSvgPlayers(): boolean {
+    return Boolean(this.ctx.players) && this.ctx.state.scene !== 'prize' && this.ctx.state.scene !== 'splash';
+  }
+
+  /** Blit or SVG-sync one seat sprite (null clears). */
+  private paintSeatSprite(seatIdx: number, spriteId: number | null = this.seats[seatIdx].spriteId): void {
+    const layout = liveSeat(seatIdx);
+    if (this.useSvgPlayers()) {
+      this.ctx.players!.setSeat(seatIdx, spriteId);
+      return;
+    }
+    if (spriteId === null) {
+      this.screen.fillRect(layout.spriteOfs, 83, 87, 7);
+      return;
+    }
+    this.screen.drawSprite(spriteId, layout.spriteOfs, 2);
   }
 
   private spriteBox(seatIdx: number, poseWidth?: number): SpriteBox {
@@ -721,13 +762,16 @@ class Game {
         s.print(layout.caption, layout.labelOfs + 14, 0, 14, 8);
       }
       if (seat.spriteId !== null) {
-        s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+        if (!this.useSvgPlayers()) {
+          s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+        }
         if (!this.ctx.hud) {
           s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
         }
         this.paintScore(j);
       }
     }
+    this.syncPlayers(true);
     this.syncHud(true);
   }
 
@@ -1051,8 +1095,12 @@ class Game {
         } else if (i < hand.ofs) {
           i += 1;
         }
-        s.fillRect(spriteOfs, 83, 99, 7);
-        s.drawSprite(DECISION_ANIM[i], spriteOfs, 2);
+        if (this.useSvgPlayers()) {
+          this.ctx.players!.setSeat(seatIdx, DECISION_ANIM[i]);
+        } else {
+          s.fillRect(spriteOfs, 83, 99, 7);
+          s.drawSprite(DECISION_ANIM[i], spriteOfs, 2);
+        }
         await this.delay(100);
         if (hand.ofs !== 2 && input.pollKeyPressed()) {
           result = hand.ofs >> 2;
@@ -1062,6 +1110,7 @@ class Game {
           break;
         }
       }
+      this.paintSeatSprite(seatIdx);
     } else {
       result = forced ?? this.random(2);
     }
@@ -1303,15 +1352,13 @@ class Game {
   /** Reload at between-rounds: redraw saved seats without wiping names or re-prompting. */
   private async presentationFromSave(): Promise<void> {
     this.setScene('presentation');
-    const s = this.screen;
     for (let j = 0; j <= 2; j += 1) {
       const seat = this.seats[j];
-      const layout = liveSeat(j);
       if (j !== this.winner) {
         seat.score = 0;
       }
       if (seat.spriteId !== null) {
-        s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+        this.paintSeatSprite(j, seat.spriteId);
       }
       this.paintScore(j);
     }
@@ -1366,7 +1413,7 @@ class Game {
           // Open the name field before the host line so typing (and the HTML
           // entry bar) is available while he says «представьтесь», not after TTS.
           seat.spriteId = SPRITE.PLAYER;
-          s.drawSprite(SPRITE.PLAYER, layout.spriteOfs, 2);
+          this.paintSeatSprite(j, SPRITE.PLAYER);
           const nameOfs = hud ? BACKBUF + SCREEN_W * 14 : layout.labelOfs + SCREEN_W * 14;
           const entry = input.beginTextEntry(10, nameOfs, 8);
           const pollName = hud
@@ -1409,7 +1456,7 @@ class Game {
       }
 
       if (seat.spriteId !== null) {
-        s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+        this.paintSeatSprite(j, seat.spriteId);
       }
       if (!this.ctx.hud) {
         s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
@@ -1647,7 +1694,11 @@ class Game {
     if (!this.ctx.hud) {
       s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
     }
-    s.fillRect(layout.spriteOfs, 83, 87, 7);
+    if (this.useSvgPlayers()) {
+      this.paintSeatSprite(this.curPlayer, null);
+    } else {
+      s.fillRect(layout.spriteOfs, 83, 87, 7);
+    }
     if (!this.ctx.hud) {
       s.fillRect(layout.labelOfs - 641, 30, 110, 7);
     }

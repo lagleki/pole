@@ -142,18 +142,20 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     continuously for about 8–10 s (mean 9 s) under Coulomb plus viscous
     friction (ω̇ = −α − βω), not in 10° jumps. Initial ω is lower because
     the disk only needs about one extra turn, not several revolutions. The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
-    Sectors alternate black/white as before. The disk is larger than the DOS
+    Sectors alternate black/white as before.     The disk is larger than the DOS
     cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
-    The canvas sits above the SVG with a circular hole so the drum tucks
-    under the letters (players and name plates stay behind the disk) while
-    the letter-pick hand stays on top. The alphabet row is the same SVG stack
+    SVG overlays sit above the rear canvas (no framebuffer punch-holes); the drum tucks
+    under the letters while players and name plates are clipped by the disk so they stay
+    behind it. The alphabet row is the same SVG stack
     (32 tiles, 20×18, y = 332), not the DOS LETTER_BACK sprites. Seat captions,
     names and player speech bubbles are SVG as well: a two-option prompt is two
     clouds inside the sprite box (tails inward), vertically centered on the sprite.
     Name plates sit in an SVG layer above the canvas, clipped by the drum disk
     so they tuck under the wheel without punching black holes in the framebuffer.
     Name typing during presentation is the same plaque (live glyphs + caret), not
-    DOS font cells under the overlay.     Score piles are SVG too: a stack of
+    DOS font cells under the overlay.     Player and NPC seat sprites (including the
+    left/right decision lean) are the same stack, clipped under the drum like the
+    plates — not PLAYER_*/CHARACTER_* framebuffer blits.     Score piles are SVG too: a stack of
     Twemoji 1f4b5 dollar notes (CC-BY 4.0) with the number centered on the top
     bill; score 0 is a Snickers wrapper (Wikimedia Commons 2000–2005 wordmark,
     public domain) instead of the DOS SNIKERS sprite. The assistant

@@ -14,7 +14,7 @@ public-domain disassembly-based reconstruction. Accepted deviations:
    may be restored from localStorage on reload (DIFF #20); Esc / New game
    still starts a fresh run.
 5. Original assets only for in-game visuals, except the SVG overlays in
-   DIFF #19 (drum, alphabet, board, HUD, studio chrome, шкатулки). Audio in the browser is TV-show samples (DIFF #25) plus host
+   DIFF #19 (drum, alphabet, board, HUD, players/NPC, studio chrome, шкатулки). Audio in the browser is TV-show samples (DIFF #25) plus host
    TTS (DIFF #21). Never ship custom replacement sprite sheets.
 6. The playable game UI is primary; the admin/editor UI is secondary.
 

@@ -22,15 +22,16 @@ import {
   saveProgress,
 } from './game/persist';
 import { mountSvgAlphabet } from './game/svgAlphabet';
-import { mountSvgBoard, punchOverlayHoles } from './game/svgBoard';
+import { mountSvgBoard } from './game/svgBoard';
 import { mountSvgHud } from './game/svgHud';
 import { mountSvgAssist } from './game/svgAssist';
 import { mountSvgHand } from './game/svgHand';
 import { mountSvgAdware } from './game/svgAdware';
 import { mountSvgYakubovich } from './game/svgYakubovich';
 import { mountSvgBoxes } from './game/svgBoxes';
-import { mountSvgStudio, punchStudioHoles } from './game/svgStudio';
-import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
+import { mountSvgPlayers } from './game/svgPlayers';
+import { mountSvgStudio } from './game/svgStudio';
+import { mountSvgWheel } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
 const MAX_EDIT_ROWS = defaultFlowSpec.questionEditor.maxVisibleRows;
@@ -97,14 +98,15 @@ app.innerHTML = `
     <section id="play-view" class="play-panel">
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
+          <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="studio-overlay" class="studio-overlay" hidden></div>
           <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="assist-overlay" class="assist-overlay" hidden></div>
           <div id="walls-overlay" class="walls-overlay" hidden></div>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
           <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
-          <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="studio-light-overlay" class="studio-light-overlay" hidden></div>
+          <div id="players-overlay" class="players-overlay" hidden></div>
           <div id="plate-overlay" class="plate-overlay" hidden></div>
           <div id="yak-overlay" class="yak-overlay" hidden></div>
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
@@ -205,6 +207,7 @@ const studioOverlay = requireElement<HTMLDivElement>('#studio-overlay');
 const studioLightOverlay = requireElement<HTMLDivElement>('#studio-light-overlay');
 const boardOverlay = requireElement<HTMLDivElement>('#board-overlay');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
+const playersOverlay = requireElement<HTMLDivElement>('#players-overlay');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const yakOverlay = requireElement<HTMLDivElement>('#yak-overlay');
 const adwareOverlay = requireElement<HTMLDivElement>('#adware-overlay');
@@ -245,6 +248,7 @@ const svgStudio = mountSvgStudio(studioOverlay, studioLightOverlay, wallsOverlay
 const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);
+const svgPlayers = mountSvgPlayers(playersOverlay);
 const svgYak = mountSvgYakubovich(yakOverlay);
 const svgAdware = mountSvgAdware(adwareOverlay);
 const svgBoxes = mountSvgBoxes(boxesOverlay);
@@ -473,6 +477,7 @@ async function gameLoop(): Promise<void> {
     currentRun = { controller, input, audio, state };
     if (spriteLib) {
       svgAssist.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
+      svgPlayers.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
       svgYak.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
       svgAdware.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
       svgBoxes.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
@@ -483,20 +488,10 @@ async function gameLoop(): Promise<void> {
       canvas,
       defaultRenderSpec.palette,
       () => input.textEntry,
-      (rgba) => {
+      () => {
         const hand = input.hand;
         const handActive = hand.step === 16 || hand.step === 20;
         svgHand.sync(handActive, hand.ofs);
-
-        if (!studioOverlay.hidden) {
-          punchStudioHoles(rgba);
-        }
-        if (!wheelOverlay.hidden) {
-          punchWheelHole(rgba, null);
-        }
-        if (!boardOverlay.hidden) {
-          punchOverlayHoles(rgba);
-        }
       },
     );
     presenter.start();
@@ -527,6 +522,7 @@ async function gameLoop(): Promise<void> {
         adware: svgAdware,
         alphabet: svgAlphabet,
         hud: svgHud,
+        players: svgPlayers,
         hand: svgHand,
         persist: persistEnabled
           ? { save: saveProgress, clear: clearProgress }
@@ -551,6 +547,7 @@ async function gameLoop(): Promise<void> {
       svgHud.setVisible(false);
       svgHud.hideBubbles();
       svgHud.setNameEntry(null);
+      svgPlayers.setVisible(false);
       svgAssist.setVisible(false);
       svgYak.setVisible(false);
       svgBoxes.setVisible(false);

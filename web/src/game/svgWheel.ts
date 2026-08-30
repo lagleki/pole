@@ -1,9 +1,8 @@
 /**
  * SVG fortune drum overlay (DIFF #19 / #26). Classic 36-sector TV layout.
- * Larger disk, hub low; clipped at the alphabet row. The canvas sits on top
- * with a circular hole so the letter-pick hand stays visible over the drum.
- * Pegs live in a second overlay above the canvas so studio pixels show
- * through around the handles (no black halo).
+ * Larger disk, hub low; clipped at the alphabet row. Live play stacks this
+ * above the rear canvas; pegs sit higher so handles stay crisp over the disk.
+ * punchWheelHole() remains for tests / optional canvas-on-top presenters.
  */
 import { SCREEN_W, VISIBLE_H } from '../engine/types';
 import { defaultRenderSpec } from '../spec';
@@ -207,9 +206,11 @@ export interface WheelHoleKeep {
 }
 
 /**
- * Make the drum disk transparent on the DOS canvas so the SVG overlay
- * (stacked behind) shows through down to the alphabet row — players and
- * name plates included. The alphabet strip (y ≥ CLIP_Y) is also punched so
+ * Make the drum disk transparent on the DOS canvas so a legacy stack with the
+ * SVG wheel behind the canvas can show through (tests / optional presenters).
+ * Live play keeps the canvas at the back of the DOM stack, so overlays sit on
+ * top without punching. Down to the alphabet row — players and name plates
+ * included when this is used. The alphabet strip (y ≥ CLIP_Y) is also punched so
  * the SVG letter tiles show through; the pointing hand is then painted from
  * the sprite itself (not leftover floor pixels), so moving it cannot leave a
  * gray silhouette on the hole.

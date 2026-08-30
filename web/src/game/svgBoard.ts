@@ -1,6 +1,6 @@
 /**
  * SVG game board — marble panel, raised bezel, stage banner, word tiles (DIFF #19 extension).
- * Sits under the canvas; punchOverlayHoles() clears the board panel only.
+ * Live play stacks this above the rear canvas; punchOverlayHoles() remains for tests.
  */
 import { SCREEN_W, VISIBLE_H } from '../engine/types';
 import { STAGE_NAMES } from './constants';
