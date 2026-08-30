@@ -95,6 +95,7 @@ app.innerHTML = `
         <div id="screen-stack" class="screen-stack">
           <div id="studio-overlay" class="studio-overlay" hidden></div>
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
+          <div id="studio-light-overlay" class="studio-light-overlay" hidden></div>
           <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="plate-overlay" class="plate-overlay" hidden></div>
           <div id="yak-overlay" class="yak-overlay" hidden></div>
@@ -196,6 +197,7 @@ function requireElement<T extends Element>(selector: string): T {
 const canvas = requireElement<HTMLCanvasElement>('#screen');
 const screenStack = requireElement<HTMLDivElement>('#screen-stack');
 const studioOverlay = requireElement<HTMLDivElement>('#studio-overlay');
+const studioLightOverlay = requireElement<HTMLDivElement>('#studio-light-overlay');
 const boardOverlay = requireElement<HTMLDivElement>('#board-overlay');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
@@ -233,7 +235,7 @@ const entryLabel = requireElement<HTMLLabelElement>('#entry-bar .entry-label');
 const hostSpeechLive = requireElement<HTMLParagraphElement>('#host-speech');
 
 const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
-const svgStudio = mountSvgStudio(studioOverlay);
+const svgStudio = mountSvgStudio(studioOverlay, studioLightOverlay);
 const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);

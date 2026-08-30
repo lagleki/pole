@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { BOARD_OUTER } from './svgBoard';
 import {
   ASSIST_WALK_Y,
   ASSIST_WING_X,
-  BACK_JAMB,
+  BACK_WALL_H,
+  BACK_WALL_Y,
   BRICK_COLS,
   BRICK_COUNT,
   BRICK_ORIGIN_X,
@@ -23,14 +23,16 @@ import {
   backWallRect,
   brickUsesMarkup,
   brickXY,
+  buildStudioLightSvg,
   buildStudioSvg,
+  lampBulbs,
+  lampIrradiance,
   leftWallPoly,
   punchStudioHoles,
   restoredBrickKinds,
   rightWallPoly,
   studioPunchRects,
   wallRect,
-  wingGap,
 } from './svgStudio';
 
 describe('svg studio', () => {
@@ -58,11 +60,14 @@ describe('svg studio', () => {
     expect(svg).toContain('id="studio-brick-0"');
     expect(svg).toContain('id="studio-wall-left"');
     expect(svg).toContain('id="studio-wall-right"');
-    expect(svg).toContain('id="studio-wing-left"');
+    expect(svg).not.toContain('id="studio-wing-left"');
     expect(svg).toContain('url(#wall-stone)');
-    expect(svg).toContain('#5555ff');
-    expect(svg).toContain('#00aaaa');
-    expect(svg).toContain('#0000aa');
+    expect(svg).toContain('url(#brick-blob)');
+    expect(svg).toContain('id="studio-swirls"');
+    expect(svg).toContain('#ffe0c0');
+    expect(svg).toContain('#6a9ee0');
+    expect(svg).not.toContain('wall-lamp-shade');
+    expect(svg).not.toContain('wall-lamp-falloff');
     expect(svg).toContain(`translate(${LAMP_POS[0].x} ${LAMP_POS[0].y})`);
     expect(svg).toContain(`translate(${LAMP_POS[1].x} ${LAMP_POS[1].y})`);
     expect(LAMP_W).toBe(16);
@@ -72,16 +77,10 @@ describe('svg studio', () => {
     expect(WALL_Y).toBe(25);
   });
 
-  it('leaves a wing gap between each side wall and the board wall', () => {
-    const gap = wingGap();
+  it('spans the back wall across the full screen width', () => {
     const back = backWallRect();
-    expect(gap.left.x0).toBe(ASSIST_WING_X);
-    expect(gap.left.x0).toBe(WALL_W);
-    expect(gap.left.x1).toBe(back.x);
-    expect(gap.left.x1).toBe(BOARD_OUTER.x - BACK_JAMB);
-    expect(gap.left.x1 - gap.left.x0).toBeGreaterThan(25);
-    expect(gap.right.x0).toBe(back.x + back.w);
-    expect(gap.right.x1 - gap.right.x0).toBe(gap.left.x1 - gap.left.x0);
+    expect(back).toEqual({ x: 0, y: BACK_WALL_Y, w: 640, h: BACK_WALL_H });
+    expect(ASSIST_WING_X).toBe(WALL_W);
     expect(ASSIST_WALK_Y).toBe(WALL_Y);
     expect(ASSIST_WALK_Y).toBeGreaterThan(back.y);
     expect(ASSIST_WALK_Y).toBeLessThan(back.y + back.h);
@@ -96,6 +95,23 @@ describe('svg studio', () => {
     expect(right[0].x).toBe(640 - WALL_W);
     expect(Math.max(...left.map((p) => p.x))).toBe(WALL_W);
     expect(Math.max(...left.map((p) => p.y))).toBe(WALL_BOT);
+  });
+
+  it('models soft lamp falloff and emits a diffuse light overlay', () => {
+    const bulbs = lampBulbs();
+    expect(bulbs).toHaveLength(2);
+    expect(bulbs[0]).toEqual({ x: LAMP_POS[0].x + 8, y: LAMP_POS[0].y + 10.5 });
+    const near = lampIrradiance(bulbs[0].x, bulbs[0].y);
+    const far = lampIrradiance(320, 300);
+    expect(near).toBeGreaterThan(far);
+    expect(near).toBeGreaterThan(1);
+    const light = buildStudioLightSvg();
+    expect(light).toContain('id="studio-light-root"');
+    expect(light).toContain('class="lamp-fill"');
+    expect(light).toContain('class="lamp-floor"');
+    expect(light).toContain('url(#lamp-bounce)');
+    expect(light).toContain('url(#lamp-fill-0)');
+    expect(light).toContain('url(#lamp-floor-1)');
   });
 
   it('writes one <use> per brick kind', () => {

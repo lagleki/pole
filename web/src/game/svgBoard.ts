@@ -276,13 +276,25 @@ export function mountSvgBoard(host: HTMLElement): BoardView {
         const cell = cells[i];
         const letterEl = tile?.querySelector<SVGTextElement>('.word-letter');
         const faceEl = tile?.querySelector<SVGRectElement>('.word-face');
+        const hiEl = tile?.querySelector<SVGPathElement>('.word-hi');
         if (!tile || !cell || !letterEl || !faceEl) {
           continue;
         }
         const showLetter = cell.state === 'open' || cell.state === 'entry';
         letterEl.setAttribute('visibility', showLetter ? 'visible' : 'hidden');
         letterEl.textContent = showLetter ? cell.letter : '';
-        faceEl.setAttribute('stroke', cell.state === 'entry' ? '#8a9ab8' : '#6a7382');
+        if (cell.state === 'open') {
+          // Revealed letter: no tile fill, black glyph on the marble.
+          faceEl.setAttribute('fill', 'none');
+          faceEl.setAttribute('stroke', 'none');
+          hiEl?.setAttribute('display', 'none');
+          letterEl.setAttribute('fill', '#000000');
+        } else {
+          faceEl.setAttribute('fill', 'url(#word-face)');
+          faceEl.setAttribute('stroke', cell.state === 'entry' ? '#8a9ab8' : '#6a7382');
+          hiEl?.setAttribute('display', 'inline');
+          letterEl.setAttribute('fill', '#ffffff');
+        }
       }
     },
   };

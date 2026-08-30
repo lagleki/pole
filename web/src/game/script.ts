@@ -64,7 +64,7 @@ function letterName(ch: string): string {
 
 function letterReplica(ch: string, n: number): { display: string; spoken: string } {
   if (n === 0) {
-    return { display: `Буква ${ch}`, spoken: `Буква ${letterName(ch)}` };
+    return { display: `Буква ${ch}`, spoken: `Буква - ${letterName(ch)}` };
   }
   const line = `${n}-я буква`;
   return { display: line, spoken: line };
@@ -903,7 +903,7 @@ class Game {
 
   /**
    * DIFF #21: every player replica is spoken (letter, drum/word, prize, box).
-   * TTS is fire-and-forget so it overlaps the yellow bubble / next beat;
+   * Bubble and TTS start together; we block on Promise.all until both finish.
    * DOS / DIFF #11: only NPC seats get a bubble (fixed 1 s), the human has none.
    */
   private async playerSay(displayText: string, spokenText = displayText): Promise<void> {
@@ -911,13 +911,17 @@ class Game {
     if (spoken.length === 0) {
       return;
     }
-    // Start voice without awaiting — bubble pacing must not wait on remote TTS.
-    this.ctx.tts?.speak(spoken, this.currentPlayerVoice());
-    if (!this.isHuman(this.curPlayer)) {
-      this.showPlayerBubble(displayText);
-      await this.waitKey(1000);
-      this.hidePlayerBubble();
-    }
+    const speech = this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
+    const showBubble = !this.isHuman(this.curPlayer);
+    const voiceDone = speech?.ended ?? Promise.resolve();
+    const bubbleDone = showBubble
+      ? (async () => {
+          this.showPlayerBubble(displayText);
+          await this.waitKey(1000);
+          this.hidePlayerBubble();
+        })()
+      : Promise.resolve();
+    await Promise.all([voiceDone, bubbleDone]);
   }
 
   /** Blank a used alphabet tile cell. */
