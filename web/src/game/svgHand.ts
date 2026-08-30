@@ -1,6 +1,10 @@
 /**
  * SVG pointing hand for letter pick (alphabet row + board / plus sector).
  * Replaces the DOS HAND sprite blit so the finger stays visible over SVG overlays.
+ *
+ * Cursor art: Wikimedia Commons Mouse-cursor-hand-pointer.svg (right hand icon),
+ * rotated 180° so the index finger points down.
+ * https://commons.wikimedia.org/wiki/File:Mouse-cursor-hand-pointer.svg
  */
 import { SCREEN_W } from '../engine/types';
 
@@ -9,20 +13,32 @@ export interface HandView {
   setVisible(visible: boolean): void;
 }
 
+/** On-screen size of the downward hand cursor. */
+export const HAND_W = 14;
+export const HAND_H = 24;
+
 export function handXY(ofs: number): { x: number; y: number } {
   return { x: ofs % SCREEN_W, y: Math.floor(ofs / SCREEN_W) };
 }
+
+/** Cropped hand icon from the Wikimedia cursor sheet, finger down after rotate(180). */
+export const HAND_VIEWBOX = '19 0 13 24';
+
+const HAND_POINTER_PATHS = `<g transform="rotate(180 25.5 12)">
+  <path d="M19 1h2v1h1v4h2v1h3v1h2v1h1v1h1v7h-1v3h-1v3H19v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-3h3v1h1V2h1"/>
+  <g fill="#fff">
+    <path d="M21 2v9h1V7h2v4h1V8h2v4h1V9h1v1h1v7h-1v3h-1v2h-8v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h2v1h1v1h1V2"/>
+  </g>
+</g>`;
 
 function buildHandSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
       width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
       <g id="hand-cursor" hidden>
         <g id="hand-sprite" transform="translate(0 0)">
-          <path fill="#f4efe6" stroke="#2a2218" stroke-width="0.8"
-                d="M2 18 L2 10 Q2 4 7 3 L9 2 Q12 1 13 4 L13 9 L14 3 Q15 0 17 1 L18 8 L19 4 Q20 1 22 3 L22 12
-                   Q22 16 19 18 L14 22 Q11 25 8 25 L5 24 Q2 22 2 18 Z"/>
-          <path fill="#dccfb8" stroke="none"
-                d="M5 20 Q8 22 12 20 L15 17 Q17 15 17 12 L17 9 L15 12 Q13 14 11 13 L9 10 L8 14 Q7 16 5 17 Z"/>
+          <svg x="0" y="0" width="${HAND_W}" height="${HAND_H}" viewBox="${HAND_VIEWBOX}">
+            ${HAND_POINTER_PATHS}
+          </svg>
         </g>
       </g>
     </svg>`;

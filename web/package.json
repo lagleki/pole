@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node ./scripts/playwright-smoke.mjs",
-    "verify": "pnpm run test && pnpm run build && pnpm run smoke"
+    "test:resume-audio": "node ./scripts/playwright-resume-audio.mjs",
+    "verify": "pnpm run test && pnpm run build && pnpm run smoke && pnpm run test:resume-audio"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

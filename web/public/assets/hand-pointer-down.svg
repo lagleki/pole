@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source: Wikimedia Commons "Mouse-cursor-hand-pointer.svg" (right hand icon).
+     https://commons.wikimedia.org/wiki/File:Mouse-cursor-hand-pointer.svg
+     Rotated 180° so the index finger points down. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="19 0 13 24">
+  <g transform="rotate(180 25.5 12)">
+    <path d="M19 1h2v1h1v4h2v1h3v1h2v1h1v1h1v7h-1v3h-1v3H19v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-3h3v1h1V2h1"/>
+    <g fill="#fff">
+      <path d="M21 2v9h1V7h2v4h1V8h2v4h1V9h1v1h1v7h-1v3h-1v2h-8v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h2v1h1v1h1V2"/>
+    </g>
+  </g>
+</svg>

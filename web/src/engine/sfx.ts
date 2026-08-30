@@ -53,6 +53,14 @@ export const PLAYERS_ENTER_VOLUME = 0.2;
 /** Under the host’s tour prompt. */
 export const PLAYERS_ENTER_UNDER_HOST = 0.05;
 
+export interface SfxTrackState {
+  primed: boolean;
+  pending: boolean;
+  paused: boolean;
+  currentTime: number;
+  volume: number;
+}
+
 export interface GameSfx {
   play(id: SfxId, options?: SfxPlayOptions): void;
   stop(id?: SfxId): void;
@@ -61,10 +69,27 @@ export interface GameSfx {
   prime(): Promise<void>;
   /** Create `<audio>` nodes and start loading mp3 before the first gesture. */
   warmup(): void;
+  /** Replay cues that failed to start after the last unlock gesture. */
+  retryPending(): void;
+  /** Primed by a user gesture (`prime()` completed). */
+  isPrimed(): boolean;
+  /** Track snapshot for smoke / resume-audio e2e. */
+  getTrackState(id: SfxId): SfxTrackState;
 }
 
 function isWebDriver(): boolean {
   return typeof navigator !== 'undefined' && Boolean(navigator.webdriver);
+}
+
+function testAudioEnabled(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).has('testAudio');
+}
+
+function audioPlaybackAllowed(): boolean {
+  return !isWebDriver() || testAudioEnabled();
 }
 
 function clampVolume(volume: number): number {
@@ -91,6 +116,18 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
   const pending = new Map<SfxId, SfxPlayOptions>();
   let primed = false;
   let priming: Promise<void> | null = null;
+  let gestureRetryHook: (() => void) | null = null;
+
+  const scheduleGestureRetry = (): void => {
+    if (gestureRetryHook || typeof document === 'undefined') {
+      return;
+    }
+    gestureRetryHook = (): void => {
+      gestureRetryHook = null;
+      flushPending();
+    };
+    document.addEventListener('pointerdown', gestureRetryHook, { once: true });
+  };
 
   const element = (id: SfxId): HTMLAudioElement | null => {
     if (typeof Audio === 'undefined') {
@@ -126,6 +163,7 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
     if (p && typeof p.catch === 'function') {
       p.catch(() => {
         pending.set(id, playOptions);
+        scheduleGestureRetry();
       });
     }
   };
@@ -157,7 +195,7 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
       if (priming) {
         return priming;
       }
-      if (typeof Audio === 'undefined' || isWebDriver()) {
+      if (typeof Audio === 'undefined' || (isWebDriver() && !testAudioEnabled())) {
         primed = true;
         return Promise.resolve();
       }
@@ -194,8 +232,27 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
       return priming;
     },
 
+    retryPending(): void {
+      flushPending();
+    },
+
+    isPrimed(): boolean {
+      return primed;
+    },
+
+    getTrackState(id: SfxId): SfxTrackState {
+      const player = players.get(id);
+      return {
+        primed,
+        pending: pending.has(id),
+        paused: player ? player.paused : true,
+        currentTime: player?.currentTime ?? 0,
+        volume: player?.volume ?? 0,
+      };
+    },
+
     play(id: SfxId, playOptions: SfxPlayOptions = {}): void {
-      if (!options.getEnabled() || isWebDriver()) {
+      if (!options.getEnabled() || !audioPlaybackAllowed()) {
         return;
       }
       if (!primed) {

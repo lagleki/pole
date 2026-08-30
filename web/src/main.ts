@@ -43,8 +43,20 @@ interface PoleDebugSnapshot {
   game: GameDebugState | null;
 }
 
+interface PoleAudioState {
+  soundEnabled: boolean;
+  sfxPrimed: boolean;
+  playersEnter: {
+    pending: boolean;
+    paused: boolean;
+    currentTime: number;
+    volume: number;
+  };
+}
+
 interface PoleDebugApi {
   getSnapshot(): PoleDebugSnapshot;
+  getAudioState(): PoleAudioState;
   /** Synthetic input for the smoke harness (bypasses the DOM guards). */
   injectKey(key: string, mods?: { alt?: boolean; ctrl?: boolean }): void;
   injectKeyUp(key: string): void;
@@ -220,6 +232,7 @@ const sessionTopPlayers: TopPlayerRecord[] = [];
 const params = new URLSearchParams(window.location.search);
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const speedFactor = Math.max(0.1, Number.parseFloat(params.get('fast') ?? '1') || 1);
+const testAudio = params.has('testAudio');
 
 let assetsReady = false;
 let spriteLib: PoleLib | null = null;
@@ -523,16 +536,23 @@ function unlockAudio(): void {
   audioOutput.unlock().catch(() => {
     // Autoplay policy may reject before the first gesture; harmless.
   });
-  void Promise.all([hostTts.prime(), gameSfx.prime()]);
+  void Promise.all([hostTts.prime(), gameSfx.prime()]).then(() => {
+    gameSfx.retryPending();
+  });
 }
 
 function skipAudioGate(): boolean {
-  return Boolean(typeof navigator !== 'undefined' && navigator.webdriver) || speedFactor !== 1;
+  const webdriver = Boolean(typeof navigator !== 'undefined' && navigator.webdriver);
+  if (testAudio) {
+    return speedFactor !== 1;
+  }
+  return webdriver || speedFactor !== 1;
 }
 
 async function waitForAudioGesture(): Promise<void> {
   if (skipAudioGate()) {
     await Promise.all([hostTts.prime(), gameSfx.prime()]);
+    gameSfx.retryPending();
     return;
   }
   gameSfx.warmup();
@@ -546,9 +566,13 @@ async function waitForAudioGesture(): Promise<void> {
       done = true;
       audioGate.hidden = true;
       audioOutput.unlock().catch(() => {});
-      void Promise.all([hostTts.prime(), gameSfx.prime()]).finally(() => {
-        resolve();
-      });
+      void Promise.all([hostTts.prime(), gameSfx.prime()])
+        .then(() => {
+          gameSfx.retryPending();
+        })
+        .finally(() => {
+          resolve();
+        });
     };
     audioGate.addEventListener('pointerdown', go, { once: true });
     audioGate.addEventListener('click', go, { once: true });
@@ -996,6 +1020,19 @@ window.__poleDebug = {
       textEntryActive: run !== null && run.input.textEntry !== null,
       hand: run ? { ...run.input.hand } : null,
       game: run ? { ...run.state } : null,
+    };
+  },
+  getAudioState(): PoleAudioState {
+    const playersEnter = gameSfx.getTrackState('playersEnter');
+    return {
+      soundEnabled,
+      sfxPrimed: gameSfx.isPrimed(),
+      playersEnter: {
+        pending: playersEnter.pending,
+        paused: playersEnter.paused,
+        currentTime: playersEnter.currentTime,
+        volume: playersEnter.volume,
+      },
     };
   },
   injectKey(key, mods) {
