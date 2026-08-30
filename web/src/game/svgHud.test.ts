@@ -29,7 +29,8 @@ describe('svg hud money and name entry', () => {
     expect(moneyStackCount(0)).toBe(0);
     expect(moneyStackCount(350)).toBe(1);
     expect(moneyStackCount(1000)).toBe(2);
-    expect(moneyStackCount(5000)).toBe(10);
+    expect(moneyStackCount(5000)).toBe(5);
+    expect(moneyStackMarkup(5000)).toContain('>5000</text>');
     const zero = moneyStackMarkup(0);
     expect(zero).toContain('hud-candy');
     expect(zero).toContain('hud-snickers');

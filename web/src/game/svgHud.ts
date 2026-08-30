@@ -228,7 +228,7 @@ export const BILL_W = 76;
 export const BILL_H = 24;
 export const BILL_STACK_DY = 3.2;
 export const BILL_STACK_DX = 1.4;
-export const BILL_MAX = 10;
+export const BILL_MAX = 5;
 
 /**
  * Dollar-bill mark adapted from Twemoji 1f4b5
