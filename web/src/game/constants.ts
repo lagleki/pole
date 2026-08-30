@@ -28,7 +28,7 @@ export const CHARACTERS: readonly CharacterSpec[] = [
   { spriteId: spriteIds.CHARACTER_BAGIRA, name: 'БАГИРА' },
 ];
 
-/** WEB: NPC letter TTS (DIFF #21). Not part of the DOS tables. */
+/** WEB: player TTS gender (DIFF #21). Not part of the DOS tables. */
 export const FEMALE_CHARACTER_SPRITES: ReadonlySet<number> = new Set([
   spriteIds.CHARACTER_OWL,
   spriteIds.CHARACTER_FREKEN,

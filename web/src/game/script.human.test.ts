@@ -6,6 +6,7 @@ import { BorlandRng } from '../engine/rng';
 import { Screen } from '../engine/screen';
 import { VirtualClock } from '../engine/timing';
 import type { Machine } from '../engine/types';
+import type { HostTts, TtsRole } from '../engine/tts';
 import { createDebugState, runGame, type GameContext, type Scene } from './script';
 import { fonts, lib, ovl, pic } from './testAssets';
 import { WHEEL_SECTORS } from './tvWheel';
@@ -53,6 +54,22 @@ function buildHarness(seed: number): Harness {
     options: { humanSeats: 2 },
   };
   return { controller, clock, input, ctx, sceneHistory };
+}
+
+function recordingTts(): { tts: HostTts; lines: Array<{ text: string; role: TtsRole }> } {
+  const lines: Array<{ text: string; role: TtsRole }> = [];
+  const done = Promise.resolve();
+  return {
+    lines,
+    tts: {
+      speak(text, role = 'host') {
+        lines.push({ text, role });
+        return { started: done, ended: done };
+      },
+      cancel() {},
+      async prime() {},
+    },
+  };
 }
 
 async function flush(): Promise<void> {
@@ -257,6 +274,24 @@ describe('human seat paths (virtual time, real assets)', () => {
     // The other two seats stay in the round.
     expect(h.ctx.state.seats[0].removed).toBe(false);
     expect(h.ctx.state.seats[2].removed).toBe(false);
+  }, 60_000);
+
+  it('speaks every player replica through TTS (decision and letter)', async () => {
+    const h = buildHarness(11);
+    const rec = recordingTts();
+    h.ctx.tts = rec.tts;
+    await drive(
+      h,
+      { solveMode: 'spin-only' },
+      () =>
+        rec.lines.some((line) => line.role !== 'host' && line.text === 'Кручу барабан!') &&
+        rec.lines.some((line) => line.role !== 'host' && line.text.startsWith('Буква ')),
+    );
+
+    expect(rec.lines).toContainEqual({ text: 'Кручу барабан!', role: 'male' });
+    expect(
+      rec.lines.some((line) => (line.role === 'male' || line.role === 'female') && /^Буква /.test(line.text)),
+    ).toBe(true);
   }, 60_000);
 
   it('human picks letters: used letters grow and value sectors pay score+value', async () => {

@@ -84,10 +84,11 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
 21. **Host TTS.** Yakubovich no longer prints a speech bubble or the round
     theme on the DOS surface — those lines go through the browser Speech
     Synthesis API (`ru-RU` on every utterance, including Android `ru_RU` voices). The PWM 7-burst
-    mumble still runs for RNG/timing (muted). Players say their letter
-    through TTS in a male or female voice (NPC gender; human names ending
-    in А/Я are treated as female except a short list like Илья/Никита).
-    That voice is not the host’s. NPC talk bubbles are unchanged.
+    mumble still runs for RNG/timing (muted). Every player replica (letter,
+    drum/word choice, prize, шкатулки) is spoken through TTS in a male or
+    female voice (NPC gender; human names ending in А/Я are treated as
+    female except a short list like Илья/Никита). That voice is not the
+    host’s. NPC talk bubbles are unchanged.
     Web sound defaults to ON so the host is audible after the first gesture
     (Android Chrome blocks intro mp3s until a tap; the play view waits for
     that tap and then unlocks every SFX element). Ctrl+S / the sound button still mute both TTS and SFX. Spin/round-win

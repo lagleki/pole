@@ -3,7 +3,7 @@ import type { TopPlayerRecord } from '../assets/pic';
 import { decodeCp866, encodeCp866 } from '../encoding/cp866';
 import type { Machine } from '../engine/types';
 import { BACKBUF, BACKBUF2, INFINITE, SCREEN_W } from '../engine/types';
-import type { HostSpeech, HostTts, TtsRole } from '../engine/tts';
+import type { HostTts, TtsRole } from '../engine/tts';
 import { hostSpeechText, spokenCasing } from '../engine/tts';
 import { PLAYERS_ENTER_UNDER_HOST, PLAYERS_ENTER_VOLUME, type GameSfx, type SfxId, type SfxPlayOptions } from '../engine/sfx';
 import { defaultAssetSpec } from '../spec';
@@ -53,6 +53,14 @@ const LETTER_NAMES: Record<string, string> = {
 
 function letterName(ch: string): string {
   return LETTER_NAMES[ch] ?? ch;
+}
+
+function letterReplica(ch: string, n: number): { display: string; spoken: string } {
+  if (n === 0) {
+    return { display: `Буква ${ch}`, spoken: `Буква ${letterName(ch)}` };
+  }
+  const line = `${n}-я буква`;
+  return { display: line, spoken: line };
 }
 
 export function playerVoiceRole(spriteId: number | null, name: string, human: boolean): TtsRole {
@@ -161,7 +169,7 @@ export interface GameContext {
   };
   /** When set, splash is skipped and the round is restored. */
   resume?: GameProgressSave;
-  /** Host voice (DIFF #21). Tests omit this and keep PWM mumble + bubble skip only when set. */
+  /** Host + player TTS (DIFF #21). Tests omit this and keep PWM mumble + the 1 s NPC bubble wait. */
   tts?: HostTts;
   /** TV-show samples (DIFF #25). Tests omit this and keep PWM. */
   sfx?: GameSfx;
@@ -762,68 +770,54 @@ class Game {
     this.yakubovichShowIdle();
   }
 
-  /**
-   * dpr:546-558. DOS: only NPC seats speak (Delphi deviation #10 gave the
-   * human a bubble too) — callers guard on isHuman.
-   */
-  private async playerTalk(bubbleOfs: number, text: string): Promise<void> {
-    const hud = this.ctx.hud;
-    if (hud) {
-      hud.showTalk(this.spriteBox(this.curPlayer), text, this.talkSide(this.curPlayer));
-      await this.waitKey(1000);
-      hud.hideBubbles();
-      return;
-    }
-    const s = this.screen;
-    s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
-    s.print(text, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(text) << 2), 0, 14, 8);
-    await this.waitKey(1000);
-    s.screenCopy(84, 39, bubbleOfs, BACKBUF2);
-  }
-
   private currentPlayerVoice(): TtsRole {
     const seat = this.seats[this.curPlayer];
     return playerVoiceRole(seat.spriteId, decodeCp866(seat.nameBytes), this.isHuman(this.curPlayer));
   }
 
-  /** DIFF #21: every seat names the letter aloud; NPC still gets the bubble. */
-  private speakLetterChoice(letterChar: string, n: number): HostSpeech | null {
-    const spoken = n === 0 ? `Буква ${letterName(letterChar)}` : spokenCasing(`${n}-я буква`);
-    return this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
-  }
-
-  /** Start «Буква N» (NPC bubble too). Wait with `finishLetterAnnouncement`. */
-  private beginLetterAnnouncement(letterChar: string, n: number): HostSpeech | null {
-    const text = n === 0 ? `Буква ${letterChar}` : `${n}-я буква`;
-    const speech = this.speakLetterChoice(letterChar, n);
-    if (!this.isHuman(this.curPlayer)) {
-      if (this.ctx.hud) {
-        this.ctx.hud.showTalk(this.spriteBox(this.curPlayer), text, this.talkSide(this.curPlayer));
-      } else {
-        const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
-        const s = this.screen;
-        s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
-        s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
-        s.print(text, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(text) << 2), 0, 14, 8);
-      }
+  private showPlayerBubble(text: string): void {
+    const hud = this.ctx.hud;
+    if (hud) {
+      hud.showTalk(this.spriteBox(this.curPlayer), text, this.talkSide(this.curPlayer));
+      return;
     }
-    return speech;
+    const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
+    const s = this.screen;
+    s.screenCopy(84, 39, BACKBUF2, bubbleOfs);
+    s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
+    s.print(text, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(text) << 2), 0, 14, 8);
   }
 
-  private async finishLetterAnnouncement(speech: HostSpeech | null): Promise<void> {
+  private hidePlayerBubble(): void {
+    if (this.ctx.hud) {
+      this.ctx.hud.hideBubbles();
+      return;
+    }
+    const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
+    this.screen.screenCopy(84, 39, bubbleOfs, BACKBUF2);
+  }
+
+  /**
+   * DIFF #21: every player replica is spoken (letter, drum/word, prize, box).
+   * DOS / DIFF #11: only NPC seats get a bubble; the human has none.
+   */
+  private async playerSay(displayText: string, spokenText = displayText): Promise<void> {
+    const spoken = spokenCasing(spokenText);
+    if (spoken.length === 0) {
+      return;
+    }
+    const speech = this.ctx.tts?.speak(spoken, this.currentPlayerVoice()) ?? null;
+    const showBubble = !this.isHuman(this.curPlayer);
+    if (showBubble) {
+      this.showPlayerBubble(displayText);
+    }
     if (speech) {
       await speech.ended;
-    } else if (!this.isHuman(this.curPlayer)) {
+    } else if (showBubble) {
       await this.waitKey(1000);
     }
-    if (!this.isHuman(this.curPlayer)) {
-      if (this.ctx.hud) {
-        this.ctx.hud.hideBubbles();
-      } else {
-        const bubbleOfs = liveSeat(this.curPlayer).talkBubbleOfs;
-        this.screen.screenCopy(84, 39, bubbleOfs, BACKBUF2);
-      }
+    if (showBubble) {
+      this.hidePlayerBubble();
     }
   }
 
@@ -954,10 +948,7 @@ class Game {
       s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, pairOfs, BACKBUF2);
     }
     await this.yakubovichSetSilent();
-    // DOS: deviation #10 — the human player did not speak.
-    if (!this.isHuman(seatIdx)) {
-      await this.playerTalk(talkBubbleOfs, result === 0 ? phrase0 : phrase1);
-    }
+    await this.playerSay(result === 0 ? phrase0 : phrase1);
     return result;
   }
 
@@ -1667,8 +1658,8 @@ class Game {
     // Redraw the full alphabet row so no artefacts remain on the layers below
     // (sprites, name plates) after the tile animation clears the bottom strip.
     this.paintAlphabetRow();
-    const letterSpeech = this.beginLetterAnnouncement(letterChar, n);
-    await this.finishLetterAnnouncement(letterSpeech);
+    const replica = letterReplica(letterChar, n);
+    await this.playerSay(replica.display, replica.spoken);
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).
