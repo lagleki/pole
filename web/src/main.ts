@@ -79,10 +79,14 @@ if (!app) {
   throw new Error('Missing #app root element');
 }
 
+const gameYear = new Date().getFullYear();
+const gameTitle = `Поле чудес ${gameYear}`;
+document.title = gameTitle;
+
 app.innerHTML = `
   <main class="studio">
     <header class="masthead">
-      <h1 class="wordmark" aria-label="Поле Чудес 2">ПОЛЕ&nbsp;ЧУДЕС&nbsp;<span class="wordmark-2">2</span></h1>
+      <h1 class="wordmark" aria-label="${gameTitle}">ПОЛЕ&nbsp;ЧУДЕС&nbsp;<span class="wordmark-2">${gameYear}</span></h1>
       <p class="tagline">КАПИТАЛ-ШОУ&nbsp;·&nbsp;DOS&nbsp;1993&nbsp;→&nbsp;TypeScript</p>
       <nav class="mode-tabs" role="tablist">
         <button id="tab-play" class="active" type="button" role="tab">Игра</button>

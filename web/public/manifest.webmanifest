@@ -1,6 +1,6 @@
 {
-  "name": "Поле Чудес 2",
-  "short_name": "Поле Чудес 2",
+  "name": "Поле чудес",
+  "short_name": "Поле чудес",
   "description": "Браузерный порт DOS-игры «Поле Чудес 2» (1993).",
   "start_url": ".",
   "display": "standalone",
