@@ -22,6 +22,7 @@ import {
   saveProgress,
 } from './game/persist';
 import { mountSvgAlphabet } from './game/svgAlphabet';
+import { mountSvgBoard, punchOverlayHoles } from './game/svgBoard';
 import { mountSvgHud } from './game/svgHud';
 import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
@@ -75,6 +76,7 @@ app.innerHTML = `
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
+          <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="plate-overlay" class="plate-overlay" hidden></div>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
           <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
@@ -169,6 +171,7 @@ function requireElement<T extends Element>(selector: string): T {
 
 const canvas = requireElement<HTMLCanvasElement>('#screen');
 const screenStack = requireElement<HTMLDivElement>('#screen-stack');
+const boardOverlay = requireElement<HTMLDivElement>('#board-overlay');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
@@ -200,6 +203,7 @@ const entryLabel = requireElement<HTMLLabelElement>('#entry-bar .entry-label');
 const hostSpeechLive = requireElement<HTMLParagraphElement>('#host-speech');
 
 const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
+const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);
 
@@ -295,6 +299,7 @@ function discardRunAndProgress(reason: string): void {
   }
   hostTts.cancel();
   svgWheel.setVisible(false);
+  svgBoard.setVisible(false);
   abortCurrentRun(reason);
 }
 
@@ -421,6 +426,7 @@ async function gameLoop(): Promise<void> {
     const machine: Machine = { screen, input, audio, clock, rng, signal };
     const state = createDebugState();
     currentRun = { controller, input, audio, state };
+    const assistBlit: { current: { ofs: number; spriteId: number } | null } = { current: null };
 
     const presenter = new CanvasPresenter(
       screen,
@@ -428,23 +434,50 @@ async function gameLoop(): Promise<void> {
       defaultRenderSpec.palette,
       () => input.textEntry,
       (rgba) => {
-        if (wheelOverlay.hidden) {
-          return;
-        }
         const hand = input.hand;
-        const sprite = hand.step === 20 ? screen.getSprite(defaultAssetSpec.spriteIds.HAND) : undefined;
-        punchWheelHole(
-          rgba,
-          sprite
-            ? {
-                ofs: hand.ofs,
-                width: sprite.width,
-                height: sprite.height,
-                pixels: sprite.pixels,
+        const sprite =
+          !wheelOverlay.hidden && hand.step === 20
+            ? screen.getSprite(defaultAssetSpec.spriteIds.HAND)
+            : undefined;
+        if (!wheelOverlay.hidden) {
+          punchWheelHole(
+            rgba,
+            sprite
+              ? {
+                  ofs: hand.ofs,
+                  width: sprite.width,
+                  height: sprite.height,
+                  pixels: sprite.pixels,
+                  transparent: 2,
+                }
+              : null,
+          );
+        } else if (sprite) {
+          // Letter-pick hand without the drum visible — still paint the hand.
+          punchWheelHole(rgba, {
+            ofs: hand.ofs,
+            width: sprite.width,
+            height: sprite.height,
+            pixels: sprite.pixels,
+            transparent: 2,
+          });
+        }
+        if (!boardOverlay.hidden) {
+          let boardKeep = null;
+          if (assistBlit.current) {
+            const assistSprite = screen.getSprite(assistBlit.current.spriteId);
+            if (assistSprite) {
+              boardKeep = {
+                ofs: assistBlit.current.ofs,
+                width: assistSprite.width,
+                height: assistSprite.height,
+                pixels: assistSprite.pixels,
                 transparent: 2,
-              }
-            : null,
-        );
+              };
+            }
+          }
+          punchOverlayHoles(rgba, boardKeep);
+        }
       },
     );
     presenter.start();
@@ -467,6 +500,8 @@ async function gameLoop(): Promise<void> {
         state,
         options: { humanSeats },
         wheel: svgWheel,
+        board: svgBoard,
+        assistBlit,
         alphabet: svgAlphabet,
         hud: svgHud,
         persist: persistEnabled
@@ -486,6 +521,7 @@ async function gameLoop(): Promise<void> {
       gameSfx.stop();
       presenter.stop();
       svgWheel.setVisible(false);
+      svgBoard.setVisible(false);
       svgAlphabet.setVisible(false);
       svgHud.setVisible(false);
       svgHud.hideBubbles();

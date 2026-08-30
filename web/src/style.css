@@ -284,6 +284,26 @@ body::after {
   display: none;
 }
 
+.board-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.board-overlay[hidden] {
+  display: none;
+}
+
+.board-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .alphabet-overlay {
   position: absolute;
   inset: 0;

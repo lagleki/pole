@@ -19,6 +19,7 @@ import {
 } from './constants';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import type { AlphabetView } from './svgAlphabet';
+import type { BoardView, BoardWordCell } from './svgBoard';
 import type { HudView, SpriteBox } from './svgHud';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
@@ -42,11 +43,11 @@ const MALE_A_YA_NAMES = new Set(['илья', 'никита', 'савва', 'фо
 const LETTER_NAMES: Record<string, string> = {
   'А': 'А', 'Б': 'Бэ', 'В': 'Вэ', 'Г': 'Гэ', 'Д': 'Дэ',
   'Е': 'Е', 'Ж': 'Жэ', 'З': 'Зэ', 'И': 'И', 'Й': 'И краткое',
-  'К': 'Ка', 'Л': 'Эль', 'М': 'Эм. Михаил', 'Н': 'Эн. Николай', 'О': '"О" - Олег',
+  'К': 'Ка', 'Л': 'Эль', 'М': 'Эм. Михаил', 'Н': 'Эн. Николай', 'О': '"Оо" - Олег',
   'П': 'Пэ', 'Р': 'Эр', 'С': 'Эс', 'Т': 'Тэ', 'У': 'У',
   'Ф': 'Эф', 'Х': 'Ха', 'Ц': 'Цэ', 'Ч': 'Чэ', 'Ш': 'Ша',
   'Щ': 'Ща', 'Ъ': 'Твёрдый знак', 'Ы': 'Ы', 'Ь': 'Мягкий знак',
-  'Э': 'Э', 'Ю': 'Ю', 'Я': 'Я',
+  'Э': 'Э оборотное', 'Ю': 'Ю', 'Я': 'Я',
 };
 
 function letterName(ch: string): string {
@@ -128,6 +129,11 @@ export interface GameOptions {
   humanSeats: 1 | 2;
 }
 
+export interface AssistBlitState {
+  ofs: number;
+  spriteId: number;
+}
+
 export interface GameContext {
   machine: Machine;
   /** Live, session-edited question list (admin panel edits apply immediately). */
@@ -139,6 +145,10 @@ export interface GameContext {
   options?: GameOptions;
   /** SVG drum overlay (DIFF #19). */
   wheel?: WheelView;
+  /** SVG stage banner, word tiles, scores (DIFF #19). */
+  board?: BoardView;
+  /** Assistant sprite kept over the board SVG hole during her walk (DIFF #19). */
+  assistBlit?: { current: AssistBlitState | null };
   /** SVG alphabet strip (DIFF #19). */
   alphabet?: AlphabetView;
   /** SVG nameplates and speech bubbles (DIFF #19). */
@@ -307,15 +317,65 @@ class Game {
     }
     this.ctx.wheel?.setFrame(a);
     this.ctx.wheel?.setVisible(true);
+    this.syncBoard(true);
     this.syncAlphabet(true);
     this.syncHud(true);
   }
 
   private hideWheel(): void {
     this.ctx.wheel?.setVisible(false);
+    this.ctx.board?.setVisible(false);
     this.ctx.alphabet?.setVisible(false);
     this.ctx.hud?.setVisible(false);
     this.ctx.hud?.hideBubbles();
+  }
+
+  private syncBoard(
+    visible = true,
+    revealedDuringWalk?: ReadonlySet<number>,
+    openBeforeWalk?: ReadonlySet<number>,
+  ): void {
+    const board = this.ctx.board;
+    if (!board) {
+      return;
+    }
+    board.setStage(this.stage);
+    board.setWordBoard(this.wordPos, this.wordBoardCells(undefined, revealedDuringWalk, openBeforeWalk));
+    board.setVisible(visible);
+  }
+
+  private letterIndexAtAssist(assistOfs: number): number {
+    const assistStandShift = ((25 - 16) >> 1);
+    const cellOfs = assistOfs + assistStandShift + 11 * SCREEN_W;
+    return (cellOfs - this.wordPos - 11 * SCREEN_W) >> 4;
+  }
+
+  private wordBoardCells(
+    entryBytes?: Uint8Array,
+    revealedDuringWalk?: ReadonlySet<number>,
+    openBeforeWalk?: ReadonlySet<number>,
+  ): BoardWordCell[] {
+    const len = this.guessedWord.length;
+    const cells: BoardWordCell[] = [];
+    for (let i = 0; i < len; i += 1) {
+      if (entryBytes && i < entryBytes.length) {
+        cells.push({
+          letter: decodeCp866(entryBytes.subarray(i, i + 1)),
+          state: 'entry',
+        });
+      } else if (
+        this.opened[i]
+        && (!revealedDuringWalk || openBeforeWalk?.has(i) || revealedDuringWalk.has(i))
+      ) {
+        cells.push({
+          letter: decodeCp866(this.guessedWord.subarray(i, i + 1)),
+          state: 'open',
+        });
+      } else {
+        cells.push({ letter: '', state: 'hidden' });
+      }
+    }
+    return cells;
   }
 
   private syncAlphabet(visible = true): void {
@@ -459,23 +519,27 @@ class Game {
     s.drawSprite(SPRITE.WALL_LEFT, 25 * SCREEN_W, 7);
     s.drawSprite(SPRITE.WALL_RIGHT, 600 + 25 * SCREEN_W, 7);
 
-    s.fillRect(15 * SCREEN_W + 120, 80, 400, 7);
-    let k = 0xedf8;
-    for (let i = 4; i >= 0; i -= 1) {
-      s.fillChar(k, 400, 0);
-      k -= 20 * SCREEN_W;
-    }
-    k = 520;
-    for (let j = 25; j >= 0; j -= 1) {
-      let n = 0x2580 + k;
-      for (let i = 80; i >= 0; i -= 1) {
-        s.fillChar(n, 1, 0);
-        n += SCREEN_W;
+    if (!this.ctx.board) {
+      s.fillRect(15 * SCREEN_W + 120, 80, 400, 7);
+      let k = 0xedf8;
+      for (let i = 4; i >= 0; i -= 1) {
+        s.fillChar(k, 400, 0);
+        k -= 20 * SCREEN_W;
       }
-      k -= 16;
+      k = 520;
+      for (let j = 25; j >= 0; j -= 1) {
+        let n = 0x2580 + k;
+        for (let i = 80; i >= 0; i -= 1) {
+          s.fillChar(n, 1, 0);
+          n += SCREEN_W;
+        }
+        k -= 16;
+      }
+      const stageName = STAGE_NAMES[this.stage];
+      s.print(stageName, 78 * SCREEN_W + 125 + 12 * 16 - ((this.len(stageName) >> 1) << 4), 0, 14, 16);
+    } else {
+      this.syncBoard(true);
     }
-    const stageName = STAGE_NAMES[this.stage];
-    s.print(stageName, 78 * SCREEN_W + 125 + 12 * 16 - ((this.len(stageName) >> 1) << 4), 0, 14, 16);
 
     s.drawSprite(SPRITE.YAKUBOVICH_BASE, 0x1e0 + 0xac * SCREEN_W, 7);
     s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, 0x1ff + 0xad * SCREEN_W, 16);
@@ -501,6 +565,10 @@ class Game {
   }
 
   private paintWordBoard(): void {
+    if (this.ctx.board) {
+      this.syncBoard(true);
+      return;
+    }
     const s = this.screen;
     for (let i = this.guessedWord.length - 1; i >= 0; i -= 1) {
       const cell = (i << 4) + this.wordPos + 11 * SCREEN_W;
@@ -767,17 +835,13 @@ class Game {
     const { moneyOfs } = liveSeat(seatIdx);
     s.fillRect(moneyOfs - 644, 30, 84, 7);
     const stride = moneyRecountStride(seat.score);
-    // Draw coins with the same stride as audio ticks to cap animation at 3s.
     for (let i = stride; i <= seat.score; i += stride) {
-      // Draw `stride` coins at once for visual density.
       for (let c = 0; c < stride; c += 1) {
         s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
       }
       const freq = this.random(10) + 50;
-      // DIFF #25: live PWM is muted; money ticks stay audible like the assistant walk.
       await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
     }
-    // Final tick for any remainder coins.
     const remainder = seat.score % stride;
     if (remainder > 0) {
       for (let c = 0; c < remainder; c += 1) {
@@ -892,7 +956,7 @@ class Game {
         return;
       }
     }
-    if (await skipIntro(1000)) {
+    if (await skipIntro(500)) {
       return;
     }
 
@@ -1201,8 +1265,12 @@ class Game {
     this.opened = new Array(this.guessedWord.length).fill(false);
     this.ctx.state.theme = question.theme;
     this.wordPos = 0x19 * SCREEN_W + 121 + 12 * 16 - ((this.remaindLetters >> 1) << 4);
-    for (let i = this.remaindLetters - 1; i >= 0; i -= 1) {
-      s.fillRect((i << 4) + this.wordPos + 11 * SCREEN_W, 19, 14, 8);
+    if (this.ctx.board) {
+      this.syncBoard(true);
+    } else {
+      for (let i = this.remaindLetters - 1; i >= 0; i -= 1) {
+        s.fillRect((i << 4) + this.wordPos + 11 * SCREEN_W, 19, 14, 8);
+      }
     }
 
     await this.yakubovichSetSilent();
@@ -1303,14 +1371,26 @@ class Game {
     const maxLen = this.guessedWord.length;
     const entry = input.beginTextEntry(maxLen, this.wordPos + 13 * SCREEN_W + 4, 16);
     const k = maxLen << 4;
-    s.screenCopy(k, 31, BACKBUF + this.wordPos, this.wordPos);
-    let j = entry.ofs - 2 * SCREEN_W - 4;
-    for (let i = maxLen; i >= 1; i -= 1) {
-      s.fillRect(j, 19, 14, 7);
-      j += 16;
+    const board = this.ctx.board;
+    if (board) {
+      const pollEntry = window.setInterval(() => {
+        board.setWordBoard(this.wordPos, this.wordBoardCells(new Uint8Array(entry.bytes)));
+      }, 50);
+      board.setWordBoard(this.wordPos, this.wordBoardCells(new Uint8Array(entry.bytes)));
+      await input.waitEnter(INFINITE);
+      window.clearInterval(pollEntry);
+      input.endTextEntry();
+      board.setWordBoard(this.wordPos, this.wordBoardCells());
+    } else {
+      s.screenCopy(k, 31, BACKBUF + this.wordPos, this.wordPos);
+      let j = entry.ofs - 2 * SCREEN_W - 4;
+      for (let i = maxLen; i >= 1; i -= 1) {
+        s.fillRect(j, 19, 14, 7);
+        j += 16;
+      }
+      await input.waitEnter(INFINITE);
+      input.endTextEntry();
     }
-    await input.waitEnter(INFINITE);
-    input.endTextEntry();
 
     const typed = new Uint8Array(entry.bytes);
     const match = typed.length === this.guessedWord.length && typed.every((b, idx) => b === this.guessedWord[idx]);
@@ -1322,7 +1402,10 @@ class Game {
       await this.yakubovichSetSilent();
       return 'won';
     }
-    s.screenCopy(k, 31, this.wordPos, BACKBUF + this.wordPos);
+    if (!this.ctx.board) {
+      s.screenCopy(k, 31, this.wordPos, BACKBUF + this.wordPos);
+    }
+    this.paintWordBoard();
     this.playSfx(this.stage === 7 ? 'wordWrongSuper' : 'wordWrong');
     await this.yakubovichReply('Неправильно! Вы покидаете игру!');
     this.removePlayer();
@@ -1525,6 +1608,12 @@ class Game {
     await this.yakubovichSetSilent();
 
     // Count matches and assistant stop positions (dpr:1427-1437).
+    const openBeforeWalk = new Set<number>();
+    for (let j = 0; j < this.guessedWord.length; j += 1) {
+      if (this.opened[j]) {
+        openBeforeWalk.add(j);
+      }
+    }
     // DIFF #23: ASSIST_STAY is 25px, cells 16px. Walk to the stand pose whose
     // midline matches the cell center (not the cell's left edge).
     const assistStayWidth = 25;
@@ -1563,17 +1652,31 @@ class Game {
     const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
     let i3 = 0;
     let walk = 0x19 * SCREEN_W + 0x28;
+    const revealed = new Set<number>();
+    const assistBlit = this.ctx.board ? this.ctx.assistBlit : undefined;
+    const syncAssistBlit = (ofs: number, spriteId: number): void => {
+      if (assistBlit) {
+        assistBlit.current = { ofs, spriteId };
+      }
+    };
+    try {
     do {
       let blitOfs = walk;
       if (k > 0 && walk >= assistPos[k]) {
         walk = assistPos[k];
         blitOfs = walk;
         s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-        const f = BACKBUF + assistPos[k] + assistStandShift + 11 * SCREEN_W;
+        syncAssistBlit(blitOfs, SPRITE.ASSIST_STAY);
+        if (this.ctx.board) {
+          revealed.add(this.letterIndexAtAssist(assistPos[k]));
+          this.syncBoard(true, revealed, openBeforeWalk);
+        } else {
+          const f = BACKBUF + assistPos[k] + assistStandShift + 11 * SCREEN_W;
+          s.fillRect(f, 19, 15, 7);
+          s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
+          s.screenCopy(15, 19, f - BACKBUF, f);
+        }
         k -= 1;
-        s.fillRect(f, 19, 15, 7);
-        s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
-        s.screenCopy(15, 19, f - BACKBUF, f);
         s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
         this.playSfx('letterCorrect');
         await this.waitKey(1450);
@@ -1587,11 +1690,17 @@ class Game {
         walk += stepDelta[i3];
         blitOfs = walk;
         s.drawSprite(stepSprite[i3], walk, 2);
+        syncAssistBlit(blitOfs, stepSprite[i3]);
         await this.m.audio.sound(this.random(100) + 1000, 7, { audible: true });
       }
       await this.delay(50);
       s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
     } while (walk < 0x19 * SCREEN_W + 0x246);
+    } finally {
+      if (assistBlit) {
+        assistBlit.current = null;
+      }
+    }
 
     let k2 = 0;
     for (let i = 0x64; i >= 20; i -= 1) {
