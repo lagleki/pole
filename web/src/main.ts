@@ -5,7 +5,7 @@ import { parseOvl, tourQuestionsFromJson, type OvlFile, type OvlQuestion, type T
 import { picFromJson, type PicJson, type TopPlayerRecord } from './assets/pic';
 import { cp866Length, decodeCp866 } from './encoding/cp866';
 import { PwmAudio, WebAudioOutput } from './engine/audio';
-import { createGameSfx, PLAYERS_ENTER_VOLUME } from './engine/sfx';
+import { createGameSfx } from './engine/sfx';
 import { GameInput } from './engine/input';
 import { BorlandRng } from './engine/rng';
 import { CanvasPresenter, Screen } from './engine/screen';
@@ -13,7 +13,7 @@ import { RealClock } from './engine/timing';
 import type { Machine } from './engine/types';
 import { fontPlaneFromRgba, rgbaToIndexed, type RgbaImage } from './assets/spriteImage';
 import { createDebugState, runGame, type GameDebugState } from './game/script';
-import { defaultAssetSpec, defaultFlowSpec, defaultRenderSpec } from './spec';
+import { defaultFlowSpec, defaultRenderSpec } from './spec';
 import {
   clearProgress,
   loadPrefs,
@@ -24,6 +24,7 @@ import {
 import { mountSvgAlphabet } from './game/svgAlphabet';
 import { mountSvgBoard, punchOverlayHoles } from './game/svgBoard';
 import { mountSvgHud } from './game/svgHud';
+import { mountSvgHand } from './game/svgHand';
 import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
@@ -82,6 +83,7 @@ app.innerHTML = `
           <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
           <div id="hud-overlay" class="hud-overlay" hidden></div>
+          <div id="hand-overlay" class="hand-overlay" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button" hidden>
             Коснитесь экрана, чтобы включить звук
           </button>
@@ -177,6 +179,7 @@ const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
 const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
+const handOverlay = requireElement<HTMLDivElement>('#hand-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
 const tabAdminBtn = requireElement<HTMLButtonElement>('#tab-admin');
@@ -206,6 +209,7 @@ const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
 const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);
+const svgHand = mountSvgHand(handOverlay);
 
 // ------------------------------------------------------------ session state
 
@@ -387,7 +391,7 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-async function gameLoop(roundMusicStarted = false): Promise<void> {
+async function gameLoop(): Promise<void> {
   for (;;) {
     while (sessionQuestions.length === 0) {
       await sleep(500);
@@ -435,32 +439,11 @@ async function gameLoop(roundMusicStarted = false): Promise<void> {
       () => input.textEntry,
       (rgba) => {
         const hand = input.hand;
-        const sprite =
-          !wheelOverlay.hidden && hand.step === 20
-            ? screen.getSprite(defaultAssetSpec.spriteIds.HAND)
-            : undefined;
+        const handActive = hand.step === 16 || hand.step === 20;
+        svgHand.sync(handActive, hand.ofs);
+
         if (!wheelOverlay.hidden) {
-          punchWheelHole(
-            rgba,
-            sprite
-              ? {
-                  ofs: hand.ofs,
-                  width: sprite.width,
-                  height: sprite.height,
-                  pixels: sprite.pixels,
-                  transparent: 2,
-                }
-              : null,
-          );
-        } else if (sprite) {
-          // Letter-pick hand without the drum visible — still paint the hand.
-          punchWheelHole(rgba, {
-            ofs: hand.ofs,
-            width: sprite.width,
-            height: sprite.height,
-            pixels: sprite.pixels,
-            transparent: 2,
-          });
+          punchWheelHole(rgba, null);
         }
         if (!boardOverlay.hidden) {
           let boardKeep = null;
@@ -504,11 +487,11 @@ async function gameLoop(roundMusicStarted = false): Promise<void> {
         assistBlit,
         alphabet: svgAlphabet,
         hud: svgHud,
+        hand: svgHand,
         persist: persistEnabled
           ? { save: saveProgress, clear: clearProgress }
           : undefined,
         resume: resume ?? undefined,
-        roundMusicStarted,
         tts: hostTts,
         sfx: gameSfx,
       });
@@ -526,6 +509,7 @@ async function gameLoop(roundMusicStarted = false): Promise<void> {
       svgAlphabet.setVisible(false);
       svgHud.setVisible(false);
       svgHud.hideBubbles();
+      svgHand.setVisible(false);
       currentRun = null;
     }
     summarizeState();
@@ -546,12 +530,12 @@ function skipAudioGate(): boolean {
   return Boolean(typeof navigator !== 'undefined' && navigator.webdriver) || speedFactor !== 1;
 }
 
-async function waitForAudioGesture(): Promise<boolean> {
+async function waitForAudioGesture(): Promise<void> {
   if (skipAudioGate()) {
-    unlockAudio();
     await Promise.all([hostTts.prime(), gameSfx.prime()]);
-    return false;
+    return;
   }
+  gameSfx.warmup();
   audioGate.hidden = false;
   await new Promise<void>((resolve) => {
     let done = false;
@@ -561,19 +545,14 @@ async function waitForAudioGesture(): Promise<boolean> {
       }
       done = true;
       audioGate.hidden = true;
-      unlockAudio();
-      resolve();
+      audioOutput.unlock().catch(() => {});
+      void Promise.all([hostTts.prime(), gameSfx.prime()]).finally(() => {
+        resolve();
+      });
     };
-    audioGate.addEventListener('pointerdown', go);
-    audioGate.addEventListener('click', go);
+    audioGate.addEventListener('pointerdown', go, { once: true });
+    audioGate.addEventListener('click', go, { once: true });
   });
-  await Promise.all([hostTts.prime(), gameSfx.prime()]);
-  const resume = persistEnabled ? loadProgress() : null;
-  if (resume?.checkpoint === 'between-rounds' && soundEnabled) {
-    gameSfx.play('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
-    return true;
-  }
-  return false;
 }
 
 function toggleFullscreen(): void {
@@ -965,10 +944,11 @@ async function loadBundledAssets(): Promise<void> {
 
   summarizeState();
   renderQuestions();
+  gameSfx.warmup();
 
   if (!assetsReady) {
     assetsReady = true;
-    void waitForAudioGesture().then((roundMusicStarted) => gameLoop(roundMusicStarted));
+    void waitForAudioGesture().then(() => gameLoop());
   } else {
     abortCurrentRun('assets-reloaded');
   }

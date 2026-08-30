@@ -59,6 +59,8 @@ export interface GameSfx {
   setVolume(id: SfxId, volume: number): void;
   /** Unlock HTMLAudio on a user gesture. Safe to call again; does not pause playing cues. */
   prime(): Promise<void>;
+  /** Create `<audio>` nodes and start loading mp3 before the first gesture. */
+  warmup(): void;
 }
 
 function isWebDriver(): boolean {
@@ -139,6 +141,15 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
   };
 
   return {
+    warmup(): void {
+      if (typeof Audio === 'undefined') {
+        return;
+      }
+      for (const id of SFX_IDS) {
+        element(id)?.load();
+      }
+    },
+
     prime(): Promise<void> {
       if (primed) {
         return Promise.resolve();
@@ -150,8 +161,6 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
         primed = true;
         return Promise.resolve();
       }
-      // Android Chrome unlocks each HTMLAudioElement only after play() in a gesture.
-      // Do this mute-play-pause once: repeating it stops the splash theme.
       const unlocks = SFX_IDS.map((id) => {
         const player = element(id);
         if (!player) {

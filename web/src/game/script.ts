@@ -21,6 +21,7 @@ import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import type { AlphabetView } from './svgAlphabet';
 import type { BoardView, BoardWordCell } from './svgBoard';
 import type { HudView, SpriteBox } from './svgHud';
+import type { HandView } from './svgHand';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
@@ -164,8 +165,8 @@ export interface GameContext {
   tts?: HostTts;
   /** TV-show samples (DIFF #25). Tests omit this and keep PWM. */
   sfx?: GameSfx;
-  /** main.ts already started playersEnter on the audio-gate gesture (between-rounds resume). */
-  roundMusicStarted?: boolean;
+  /** SVG pointing hand (alphabet row + board). Tests omit and keep canvas HAND. */
+  hand?: HandView;
 }
 
 interface Seat {
@@ -1074,7 +1075,10 @@ class Game {
   /** dpr:990-1037 */
   private async stageSetup(): Promise<void> {
     this.setScene('stage-setup');
-    if (this.stage > 0) {
+    if (this.stage === 7) {
+      this.playSfx('superGame');
+      this.playSfx('super60s');
+    } else if (this.stage > 0) {
       this.playSfx('sting');
     }
     const s = this.screen;
@@ -1109,12 +1113,7 @@ class Game {
     this.seats[0].spriteId = saved;
     this.stopSfx('opening');
     this.stopSfx('openingOld');
-    if (this.resumingBetweenRounds) {
-      await this.ctx.sfx?.prime();
-    }
-    if (!this.ctx.roundMusicStarted) {
-      this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
-    }
+    this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
     // WEB DIFF #27: TV studio open (Wikiquote catchphrase + calendar weekday).
     if (this.stage === 0) {
       for (const line of firstTourGreeting(broadcastWeekday())) {
@@ -1293,8 +1292,6 @@ class Game {
   /** dpr:1125-1189. DOS: offered to human seats only (deviation #5). */
   private async boxGame(): Promise<void> {
     this.setScene('box-game');
-    this.playSfx('superGame');
-    this.playSfx('super60s');
     const s = this.screen;
     const seat = this.seats[this.curPlayer];
     const { talkBubbleOfs } = liveSeat(this.curPlayer);
@@ -1364,8 +1361,6 @@ class Game {
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       await this.updateMoney(this.curPlayer, seat.score);
     }
-    this.stopSfx('superGame');
-    this.stopSfx('super60s');
     this.movesForBox = 0;
   }
 
@@ -1495,10 +1490,13 @@ class Game {
     hand.max = hand.ofs + (this.guessedWord.length << 4) - 16;
     hand.prev = 12 * SCREEN_W + 0xc8;
     let n = 1;
+    const svgHand = this.ctx.hand;
     for (;;) {
-      s.restoreBehind();
-      s.saveBehind(hand.ofs, 15, 26);
-      s.drawSprite(SPRITE.HAND, hand.ofs, 2);
+      if (!svgHand) {
+        s.restoreBehind();
+        s.saveBehind(hand.ofs, 15, 26);
+        s.drawSprite(SPRITE.HAND, hand.ofs, 2);
+      }
       n = (hand.ofs - hand.min + 16) >> 4;
       const letterIdx = this.guessedWord[n - 1] - 0x80;
       if (input.pollKeyPressed()) {
@@ -1511,7 +1509,9 @@ class Game {
       // WEB: the original busy-waits here; yield so the browser can deliver input.
       await this.delay(10);
     }
-    s.restoreBehind();
+    if (!svgHand) {
+      s.restoreBehind();
+    }
     hand.step = 0;
     return n;
   }
@@ -1565,11 +1565,15 @@ class Game {
           idx = next;
         }
         i = idx;
-        s.restoreBehind();
-        s.saveBehind(hand.ofs, 15, 26);
-        s.drawSprite(SPRITE.HAND, hand.ofs, 2);
-        if (input.pollKeyPressed()) {
+        if (!this.ctx.hand) {
           s.restoreBehind();
+          s.saveBehind(hand.ofs, 15, 26);
+          s.drawSprite(SPRITE.HAND, hand.ofs, 2);
+        }
+        if (input.pollKeyPressed()) {
+          if (!this.ctx.hand) {
+            s.restoreBehind();
+          }
           hand.step = 0;
           this.clearAlphabetCell(i);
           return i;
