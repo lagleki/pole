@@ -13,8 +13,8 @@ bargaining with Якубович, ad breaks, the endgame ceremony, and the top-8
 
 ```bash
 cd web
-npm install
-npm run dev        # open the printed URL
+pnpm install
+pnpm run dev        # open the printed URL
 ```
 
 URL parameters: `?seed=42` reproduces a whole game deterministically,
@@ -32,10 +32,10 @@ import/export of binary-correct `POLE.OVL` files.
 
 ```bash
 cd web
-npm run test     # 93 unit + integration tests, incl. seeded headless full games
-npm run build
-npm run smoke    # Playwright: splash → name entry → spin → letter → solve
-npm run verify   # all of the above
+pnpm run test     # 93 unit + integration tests, incl. seeded headless full games
+pnpm run build
+pnpm run smoke    # Playwright: splash → name entry → spin → letter → solve
+pnpm run verify   # all of the above
 ```
 
 ## How it works

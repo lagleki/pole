@@ -29,14 +29,14 @@ const HUMAN_NAME = 'ТЕСТ';
 
 let reportWritten = false;
 
-function npmCommand() {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+function pnpmCommand() {
+  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
 function startDevServer() {
   const stdout = [];
   const stderr = [];
-  const child = spawn(npmCommand(), ['run', 'dev', '--', '--host', host, '--port', String(port), '--strictPort'], {
+  const child = spawn(pnpmCommand(), ['run', 'dev', '--host', host, '--port', String(port), '--strictPort'], {
     cwd: webDir,
     env: {
       ...process.env,

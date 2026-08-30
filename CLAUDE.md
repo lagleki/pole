@@ -20,8 +20,8 @@ public-domain disassembly-based reconstruction. Accepted deviations:
 
 ## Commands (run from `web/`)
 
-- `npm run dev` — play (URL params: `?seed=42` deterministic run, `?fast=10` speed)
-- `npm run test` / `npm run build` / `npm run smoke` / `npm run verify`
+- `pnpm run dev` — play (URL params: `?seed=42` deterministic run, `?fast=10` speed)
+- `pnpm run test` / `pnpm run build` / `pnpm run smoke` / `pnpm run verify`
 - Required after any gameplay/rendering/input/audio change: test + build + smoke.
 
 ## Conventions
@@ -69,7 +69,7 @@ Fidelity invariants (keep these true):
 - The original binaries live only in gitignored `_local/Pole Chudes 2/` as
   test fixtures. Do not modify them, and never ship binaries from
   `web/public/assets` again. To restore pristine assets, regenerate from the
-  fixtures with `npm run transcode:assets` (self-verifying); editing a
+  fixtures with `pnpm run transcode:assets` (self-verifying); editing a
   shipped image intentionally forks the art and will fail the fidelity tests.
   Never hand-edit the JSON manifests.
 - Transcoding changes the format, not the provenance — the art/data remain
