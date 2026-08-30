@@ -85,22 +85,4 @@ describe('svg board', () => {
     expect(rgba[framePx]).toBe(0);
     expect(boardPunchRects()).toHaveLength(1);
   });
-
-  it('restores assistant sprite pixels over the punched board hole', () => {
-    const rgba = new Uint8ClampedArray(640 * 350 * 4);
-    rgba.fill(255);
-    const ofs = BOARD_FRAME.x + BOARD_FRAME.y * 640;
-    const keep = {
-      ofs,
-      width: 4,
-      height: 4,
-      pixels: new Uint8Array([2, 1, 1, 2, 1, 7, 7, 1, 1, 7, 7, 1, 2, 1, 1, 2]),
-      transparent: 2,
-    };
-    punchOverlayHoles(rgba, keep);
-    expect(rgba[(BOARD_OUTER.y * 640 + BOARD_OUTER.x) * 4 + 3]).toBe(0);
-    expect(rgba[(ofs + 1) * 4 + 3]).toBe(255);
-    expect(rgba[(ofs + 1) * 4]).toBe(0);
-    expect(rgba[(ofs + 1 + 640) * 4 + 1]).toBe(0xaa);
-  });
 });

@@ -99,6 +99,7 @@ describe('svg wheel', () => {
     const svg = buildHudSvg();
     expect(svg).toContain('id="hud-plates"');
     expect(svg).toContain('id="plate-under-drum"');
+    expect(svg).toContain('id="hud-money-row"');
     expect(svg).not.toContain('id="hud-bubbles"');
     expect(svg).toContain('data-seat="2"');
     const box = { x: 200, y: 100, w: 87, h: 83 };

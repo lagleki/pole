@@ -21,7 +21,10 @@ import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import type { AlphabetView } from './svgAlphabet';
 import type { BoardView, BoardWordCell } from './svgBoard';
 import type { HudView, SpriteBox } from './svgHud';
+import type { AssistView } from './svgAssist';
 import type { HandView } from './svgHand';
+import type { AdwareView } from './svgAdware';
+import type { YakView } from './svgYakubovich';
 import type { WheelView } from './svgWheel';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
@@ -138,11 +141,6 @@ export interface GameOptions {
   humanSeats: 1 | 2;
 }
 
-export interface AssistBlitState {
-  ofs: number;
-  spriteId: number;
-}
-
 export interface GameContext {
   machine: Machine;
   /** Live, session-edited question list (admin panel edits apply immediately). */
@@ -154,13 +152,17 @@ export interface GameContext {
   options?: GameOptions;
   /** SVG drum overlay (DIFF #19). */
   wheel?: WheelView;
-  /** SVG stage banner, word tiles, scores (DIFF #19). */
+  /** SVG stage banner, word tiles (DIFF #19). */
   board?: BoardView;
-  /** Assistant sprite kept over the board SVG hole during her walk (DIFF #19). */
-  assistBlit?: { current: AssistBlitState | null };
+  /** SVG assistant over the board hole (DIFF #19). */
+  assist?: AssistView;
+  /** SVG Yakubovich base + mouth/eyes (DIFF #19). */
+  yak?: YakView;
+  /** SVG commercial-break plaque over the host (DIFF #19). */
+  adware?: AdwareView;
   /** SVG alphabet strip (DIFF #19). */
   alphabet?: AlphabetView;
-  /** SVG nameplates and speech bubbles (DIFF #19). */
+  /** SVG nameplates, money stacks, speech bubbles (DIFF #19). */
   hud?: HudView;
   /** localStorage checkpoint (DIFF #20). */
   persist?: {
@@ -227,6 +229,10 @@ class Game {
   private readonly humanSeats: 1 | 2;
   /** WEB: seat whose SVG plaque is being introduced (name not assigned yet). */
   private hudIntroSeat: number | null = null;
+  /** WEB: SVG money-stack jitter during recount. */
+  private moneyJitter: { seat: number; x: number; y: number } | null = null;
+  /** WEB: score shown on the SVG pile during recount (climbs with ticks). */
+  private moneyShowScore: { seat: number; score: number } | null = null;
   private skipToTurns = false;
   /** WEB: resume straight to letter-pick (spin already done). */
   private resumeAtLetterPick: { awardKind: 'perHit' | 'double' | 'keep'; awardUnit: number } | null = null;
@@ -348,6 +354,9 @@ class Game {
     this.ctx.alphabet?.setVisible(false);
     this.ctx.hud?.setVisible(false);
     this.ctx.hud?.hideBubbles();
+    this.ctx.assist?.setVisible(false);
+    this.ctx.yak?.setVisible(false);
+    this.ctx.adware?.setVisible(false);
   }
 
   private syncBoard(
@@ -417,6 +426,13 @@ class Game {
         caption: liveSeat(i).caption,
         name: decodeCp866(seat.nameBytes),
         present: seat.nameBytes.length > 0 || blink?.seat === i || this.hudIntroSeat === i,
+        score:
+          this.moneyShowScore?.seat === i
+            ? this.moneyShowScore.score
+            : seat.spriteId !== null || this.hudIntroSeat === i
+              ? seat.score
+              : null,
+        jitter: this.moneyJitter?.seat === i ? { x: this.moneyJitter.x, y: this.moneyJitter.y } : undefined,
       })),
       blink,
     );
@@ -561,7 +577,9 @@ class Game {
     s.drawSprite(SPRITE.WALL_LEFT, 25 * SCREEN_W, 7);
     s.drawSprite(SPRITE.WALL_RIGHT, 600 + 25 * SCREEN_W, 7);
 
-    if (!this.ctx.board) {
+    if (this.ctx.board) {
+      this.syncBoard(true);
+    } else {
       s.fillRect(15 * SCREEN_W + 120, 80, 400, 7);
       let k = 0xedf8;
       for (let i = 4; i >= 0; i -= 1) {
@@ -579,10 +597,19 @@ class Game {
       }
       const stageName = STAGE_NAMES[this.stage];
       s.print(stageName, 78 * SCREEN_W + 125 + 12 * 16 - ((this.len(stageName) >> 1) << 4), 0, 14, 16);
-    } else {
-      this.syncBoard(true);
     }
 
+    this.paintYakubovichStudio();
+  }
+
+  /** Studio host portrait — SVG overlay when available (DIFF #19). */
+  private paintYakubovichStudio(): void {
+    const yak = this.ctx.yak;
+    if (yak) {
+      yak.showIdle();
+      return;
+    }
+    const s = this.screen;
     s.drawSprite(SPRITE.YAKUBOVICH_BASE, 0x1e0 + 0xac * SCREEN_W, 7);
     s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, 0x1ff + 0xad * SCREEN_W, 16);
     s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0x214 + 0xd1 * SCREEN_W, 16);
@@ -624,6 +651,12 @@ class Game {
   }
 
   private paintScore(seatIdx: number): void {
+    this.moneyJitter = null;
+    this.moneyShowScore = null;
+    if (this.ctx.hud) {
+      this.syncHud(true);
+      return;
+    }
     const s = this.screen;
     const seat = this.seats[seatIdx];
     const { moneyOfs } = liveSeat(seatIdx);
@@ -679,12 +712,16 @@ class Game {
     const s = this.screen;
     s.screenCopy(161, 40, 0x164df, BACKBUF + 0x164df);
     await this.m.audio.speechSound();
-    s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, 0x1ff + 0xad * SCREEN_W, 16);
-    s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0xd1 * SCREEN_W + 0x214, 16);
+    this.yakubovichShowIdle();
   }
 
   /** Studio rest pose: closed mouth, open eyes (same sprites as setSilent). */
   private yakubovichShowIdle(): void {
+    const yak = this.ctx.yak;
+    if (yak) {
+      yak.showIdle();
+      return;
+    }
     const s = this.screen;
     s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, 0x1ff + 0xad * SCREEN_W, 16);
     s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0xd1 * SCREEN_W + 0x214, 16);
@@ -713,6 +750,7 @@ class Game {
   /** Keep the jaw moving until `ended` resolves, then close the eyes. */
   private async yakubovichMouthUntil(ended: Promise<void>): Promise<void> {
     const s = this.screen;
+    const yak = this.ctx.yak;
     const eyesLow = 0x214 + 0xd1 * SCREEN_W;
     const eyesHigh = 0x214 + 0xc9 * SCREEN_W;
     const body = 0x1ff + 0xad * SCREEN_W;
@@ -721,17 +759,29 @@ class Game {
       done = true;
     });
 
-    s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
-    s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesHigh, 16);
+    if (yak) {
+      yak.setPose('active', 'close', true);
+    } else {
+      s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
+      s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesHigh, 16);
+    }
     while (!done) {
-      s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, body, 16);
-      s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, eyesLow, 16);
+      if (yak) {
+        yak.setPose('passive', 'open', false);
+      } else {
+        s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, body, 16);
+        s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, eyesLow, 16);
+      }
       await this.delay(120);
       if (done) {
         break;
       }
-      s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
-      s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesHigh, 16);
+      if (yak) {
+        yak.setPose('active', 'close', true);
+      } else {
+        s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
+        s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesHigh, 16);
+      }
       await this.delay(180);
     }
     await mark;
@@ -742,26 +792,51 @@ class Game {
   /** Mouth/eye cycle from DrawYakubovichTalk (dpr:511-544), without the bubble. */
   private async yakubovichMouthAnimation(): Promise<void> {
     const s = this.screen;
+    const yak = this.ctx.yak;
     const eyesLow = 0x214 + 0xd1 * SCREEN_W;
     const eyesHigh = 0x214 + 0xc9 * SCREEN_W;
     const body = 0x1ff + 0xad * SCREEN_W;
 
     await this.m.audio.speechSound();
-    s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesLow, 16);
+    if (yak) {
+      yak.setPose('passive', 'close', false);
+    } else {
+      s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesLow, 16);
+    }
     await this.delay(200);
-    s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, eyesLow, 16);
+    if (yak) {
+      yak.setPose('passive', 'open', false);
+    } else {
+      s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, eyesLow, 16);
+    }
     await this.delay(150);
-    s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesLow, 16);
+    if (yak) {
+      yak.setPose('passive', 'close', false);
+    } else {
+      s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesLow, 16);
+    }
     await this.delay(150);
-    s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
-    s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesHigh, 16);
+    if (yak) {
+      yak.setPose('active', 'close', true);
+    } else {
+      s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
+      s.drawSprite(SPRITE.YAKUBOVICH_EYES_CLOSE, eyesHigh, 16);
+    }
 
     for (let i = 2; i >= 0; i -= 1) {
       await this.m.audio.speechSound();
-      s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, body, 16);
-      s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, eyesLow, 16);
+      if (yak) {
+        yak.setPose('passive', 'open', false);
+      } else {
+        s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, body, 16);
+        s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, eyesLow, 16);
+      }
       await this.delay(this.random(2) * 200 + 100);
-      s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
+      if (yak) {
+        yak.setPose('active', 'close', true);
+      } else {
+        s.drawSprite(SPRITE.YAKUBOVICH_ACTIVE, body, 16);
+      }
       await this.delay(this.random(2) * 50 + 100);
     }
 
@@ -861,19 +936,34 @@ class Game {
     }
     const s = this.screen;
     const { moneyOfs } = liveSeat(seatIdx);
-    s.fillRect(moneyOfs - 644, 30, 84, 7);
+    const hud = this.ctx.hud;
+    if (!hud) {
+      s.fillRect(moneyOfs - 644, 30, 84, 7);
+    }
     const stride = moneyRecountStride(seat.score);
     for (let i = stride; i <= seat.score; i += stride) {
-      for (let c = 0; c < stride; c += 1) {
-        s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
+      if (hud) {
+        this.moneyShowScore = { seat: seatIdx, score: i };
+        this.moneyJitter = { seat: seatIdx, x: this.random(12) - 4, y: this.random(7) - 1 };
+        this.syncHud(true);
+      } else {
+        for (let c = 0; c < stride; c += 1) {
+          s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
+        }
       }
       const freq = this.random(10) + 50;
       await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
     }
     const remainder = seat.score % stride;
     if (remainder > 0) {
-      for (let c = 0; c < remainder; c += 1) {
-        s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
+      if (hud) {
+        this.moneyShowScore = { seat: seatIdx, score: seat.score };
+        this.moneyJitter = { seat: seatIdx, x: this.random(12) - 4, y: this.random(7) - 1 };
+        this.syncHud(true);
+      } else {
+        for (let c = 0; c < remainder; c += 1) {
+          s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
+        }
       }
       const freq = this.random(10) + 50;
       await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
@@ -1234,13 +1324,27 @@ class Game {
           // entry bar) is available while he says «представьтесь», not after TTS.
           seat.spriteId = SPRITE.PLAYER;
           s.drawSprite(SPRITE.PLAYER, layout.spriteOfs, 2);
-          const entry = input.beginTextEntry(10, layout.labelOfs + SCREEN_W * 14, 8);
+          const nameOfs = hud ? BACKBUF + SCREEN_W * 14 : layout.labelOfs + SCREEN_W * 14;
+          const entry = input.beginTextEntry(10, nameOfs, 8);
+          const pollName = hud
+            ? window.setInterval(() => {
+                hud.setNameEntry({
+                  seat: j,
+                  text: decodeCp866(new Uint8Array(entry.bytes)),
+                  caret: Math.floor(Date.now() / 400) % 2 === 0,
+                });
+              }, 50)
+            : 0;
           await Promise.all([
             this.yakubovichTalk('Пожалуйста, представьтесь!'),
             input.waitEnter(INFINITE),
           ]);
+          if (hud) {
+            window.clearInterval(pollName);
+            hud.setNameEntry(null);
+          }
           input.endTextEntry();
-          if (!this.ctx.hud) {
+          if (!hud) {
             s.fillRect(layout.labelOfs + SCREEN_W * 14, 14, 80, 7);
           }
           seat.nameBytes = new Uint8Array(entry.bytes);
@@ -1464,7 +1568,9 @@ class Game {
     const layout = liveSeat(this.curPlayer);
     this.seats[this.curPlayer].spriteId = null;
     this.seats[this.curPlayer].nameBytes = new Uint8Array(0);
-    s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
+    if (!this.ctx.hud) {
+      s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
+    }
     s.fillRect(layout.spriteOfs, 83, 87, 7);
     if (!this.ctx.hud) {
       s.fillRect(layout.labelOfs - 641, 30, 110, 7);
@@ -1708,10 +1814,10 @@ class Game {
     let i3 = 0;
     let walk = 0x19 * SCREEN_W + 0x28;
     const revealed = new Set<number>();
-    const assistBlit = this.ctx.board ? this.ctx.assistBlit : undefined;
-    const syncAssistBlit = (ofs: number, spriteId: number): void => {
-      if (assistBlit) {
-        assistBlit.current = { ofs, spriteId };
+    const assist = this.ctx.assist;
+    const syncAssist = (ofs: number, spriteId: number): void => {
+      if (assist) {
+        assist.sync(true, ofs, spriteId);
       }
     };
     try {
@@ -1720,8 +1826,10 @@ class Game {
       if (k > 0 && walk >= assistPos[k]) {
         walk = assistPos[k];
         blitOfs = walk;
-        s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-        syncAssistBlit(blitOfs, SPRITE.ASSIST_STAY);
+        if (!assist) {
+          s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+        }
+        syncAssist(blitOfs, SPRITE.ASSIST_STAY);
         if (this.ctx.board) {
           revealed.add(this.letterIndexAtAssist(assistPos[k]));
           this.syncBoard(true, revealed, openBeforeWalk);
@@ -1732,7 +1840,10 @@ class Game {
           s.screenCopy(15, 19, f - BACKBUF, f);
         }
         k -= 1;
-        s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+        if (!assist) {
+          s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+        }
+        syncAssist(blitOfs, SPRITE.ASSIST_STAY);
         this.playSfx('letterCorrect');
         await this.waitKey(1450);
       } else {
@@ -1744,17 +1855,19 @@ class Game {
         i3 = (i3 + 1) & 3;
         walk += stepDelta[i3];
         blitOfs = walk;
-        s.drawSprite(stepSprite[i3], walk, 2);
-        syncAssistBlit(blitOfs, stepSprite[i3]);
+        if (!assist) {
+          s.drawSprite(stepSprite[i3], walk, 2);
+        }
+        syncAssist(blitOfs, stepSprite[i3]);
         await this.m.audio.sound(this.random(100) + 1000, 7, { audible: true });
       }
       await this.delay(50);
-      s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
+      if (!assist) {
+        s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
+      }
     } while (walk < 0x19 * SCREEN_W + 0x246);
     } finally {
-      if (assistBlit) {
-        assistBlit.current = null;
-      }
+      assist?.sync(false, 0, SPRITE.ASSIST_STAY);
     }
 
     let k2 = 0;
@@ -1998,7 +2111,7 @@ class Game {
     }
   }
 
-  /** dpr:1521-1554 */
+  /** dpr:1521-1554. DIFF #19: plaque is an SVG overlay over Yakubovich. */
   private async adware(): Promise<void> {
     if (this.stage >= 7) {
       return;
@@ -2010,6 +2123,21 @@ class Game {
     await this.yakubovichSetSilent();
     await this.yakubovichTalk('Рекламная пауза!');
     await this.yakubovichSetSilent();
+
+    const adware = this.ctx.adware;
+    if (adware) {
+      let k = 120;
+      for (let i = 79; i >= 0; i -= 1) {
+        adware.setRise(i);
+        await this.m.audio.sound(k, 10);
+        k += 20;
+        await this.delay(i >> 1);
+      }
+      await this.waitKey(INFINITE);
+      adware.setVisible(false);
+      this.paintYakubovichStudio();
+      return;
+    }
 
     s.screenCopy(168, 170, BACKBUF + 0x1afd8, 0x1afd8);
     s.drawSprite(SPRITE.ADWARE_BACKGROUND, BACKBUF + 0x1b261, 16);

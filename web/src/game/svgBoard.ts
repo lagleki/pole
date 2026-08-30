@@ -1,23 +1,12 @@
 /**
  * SVG game board — marble panel, raised bezel, stage banner, word tiles (DIFF #19 extension).
  * Sits under the canvas; punchOverlayHoles() clears the board panel only.
- * Money stacks stay on the DOS canvas (original MONEY/SNIKERS sprites).
  */
 import { SCREEN_W, VISIBLE_H } from '../engine/types';
-import { defaultRenderSpec } from '../spec';
 import { STAGE_NAMES } from './constants';
 import { escapeSvgText } from './svgHud';
 
-/** Opaque sprite pixels restored on the canvas over the board SVG hole. */
-export interface BoardHoleKeep {
-  ofs: number;
-  width: number;
-  height: number;
-  pixels: Uint8Array;
-  transparent: number;
-}
-
-/** EGA palette bytes used by the original board chrome (defaultRenderSpec.stage.board). */
+/** EGA palette bytes used by the original board chrome. */
 const EGA_BLACK = '#000000';
 
 /** Raised frame around the grid (marble panel extends under this ring). */
@@ -102,14 +91,14 @@ export function buildStageRowMarkup(name: string): string {
     .join('');
 }
 
-/** Board panel + raised bezel — scores and studio chrome stay on the canvas. */
+/** Board panel + raised bezel — studio chrome stays on the canvas. */
 export function boardPunchRects(): readonly { x: number; y: number; w: number; h: number }[] {
   return [
     { x: BOARD_OUTER.x, y: BOARD_OUTER.y, w: BOARD_OUTER.w, h: BOARD_OUTER.h },
   ];
 }
 
-export function punchOverlayHoles(rgba: Uint8ClampedArray, keep?: BoardHoleKeep | null): void {
+export function punchOverlayHoles(rgba: Uint8ClampedArray): void {
   for (const { x, y, w, h } of boardPunchRects()) {
     const y0 = Math.max(0, y);
     const y1 = Math.min(VISIBLE_H, y + h);
@@ -120,37 +109,6 @@ export function punchOverlayHoles(rgba: Uint8ClampedArray, keep?: BoardHoleKeep 
       for (let px = x0; px < x1; px += 1) {
         rgba[row + px * 4 + 3] = 0;
       }
-    }
-  }
-  if (keep) {
-    blitSpriteOverBoardHole(rgba, keep);
-  }
-}
-
-function blitSpriteOverBoardHole(rgba: Uint8ClampedArray, keep: BoardHoleKeep): void {
-  const palette = defaultRenderSpec.palette;
-  const keepX = keep.ofs % SCREEN_W;
-  const keepY = Math.floor(keep.ofs / SCREEN_W);
-  for (let ly = 0; ly < keep.height; ly += 1) {
-    const y = keepY + ly;
-    if (y < 0 || y >= VISIBLE_H) {
-      continue;
-    }
-    for (let lx = 0; lx < keep.width; lx += 1) {
-      const value = keep.pixels[ly * keep.width + lx];
-      if (value === keep.transparent) {
-        continue;
-      }
-      const x = keepX + lx;
-      if (x < 0 || x >= SCREEN_W) {
-        continue;
-      }
-      const color = palette[value & 0x0f];
-      const i = (y * SCREEN_W + x) * 4;
-      rgba[i] = color[0];
-      rgba[i + 1] = color[1];
-      rgba[i + 2] = color[2];
-      rgba[i + 3] = 255;
     }
   }
 }

@@ -149,6 +149,15 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     clouds inside the sprite box (tails inward), vertically centered on the sprite.
     Name plates sit in an SVG layer above the canvas, clipped by the drum disk
     so they tuck under the wheel without punching black holes in the framebuffer.
+    Name typing during presentation is the same plaque (live glyphs + caret), not
+    DOS font cells under the overlay.     Score piles are SVG too: a stack of
+    Twemoji 1f4b5 dollar notes (CC-BY 4.0) with the number centered on the top
+    bill; score 0 is a Snickers wrapper (Wikimedia Commons 2000–2005 wordmark,
+    public domain) instead of the DOS SNIKERS sprite. The assistant
+    walk and Yakubovich (base + mouth/eye layers) are SVG overlays of the
+    original sprites, not framebuffer blits over the board/host. The
+    commercial-break plaque (ADWARE_BACKGROUND + DOS copy) rises in that
+    overlay stack above the host, not under him on the canvas.
     The hub is 8 px left of the DOS cell
     center. Seat 1 (2-ой игрок) is 4 px left and 24 px up; seat 2’s sprite
     stays 24 px right, its nameplate 8 px right so it sits under the sprite.

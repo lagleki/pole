@@ -338,6 +338,36 @@ body::after {
   display: none;
 }
 
+.yak-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+
+.yak-overlay[hidden] {
+  display: none;
+}
+
+.adware-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.adware-overlay[hidden] {
+  display: none;
+}
+
+.yak-overlay svg,
+.adware-overlay svg,
 .plate-overlay svg,
 .hud-overlay svg {
   display: block;
@@ -365,6 +395,26 @@ body::after {
   height: 100%;
 }
 
+.assist-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.assist-overlay[hidden] {
+  display: none;
+}
+
+.assist-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .hud-overlay {
   position: absolute;
   inset: 0;
@@ -385,6 +435,15 @@ body::after {
 
 .hud-plate.is-blink .hud-caption {
   fill: #aaaaaa;
+}
+
+.hud-score {
+  pointer-events: none;
+  fill: #ffffff;
+  stroke: #000000;
+  stroke-width: 2.4px;
+  paint-order: stroke fill;
+  font-size: 13px;
 }
 
 .alpha-lift {

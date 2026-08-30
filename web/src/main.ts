@@ -24,7 +24,10 @@ import {
 import { mountSvgAlphabet } from './game/svgAlphabet';
 import { mountSvgBoard, punchOverlayHoles } from './game/svgBoard';
 import { mountSvgHud } from './game/svgHud';
+import { mountSvgAssist } from './game/svgAssist';
 import { mountSvgHand } from './game/svgHand';
+import { mountSvgAdware } from './game/svgAdware';
+import { mountSvgYakubovich } from './game/svgYakubovich';
 import { mountSvgWheel, punchWheelHole } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
@@ -91,10 +94,13 @@ app.innerHTML = `
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="plate-overlay" class="plate-overlay" hidden></div>
+          <div id="yak-overlay" class="yak-overlay" hidden></div>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
           <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
           <div id="wheel-pegs" class="wheel-pegs" hidden></div>
           <div id="hud-overlay" class="hud-overlay" hidden></div>
+          <div id="assist-overlay" class="assist-overlay" hidden></div>
+          <div id="adware-overlay" class="adware-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button" hidden>
             Коснитесь экрана, чтобы включить звук
@@ -188,9 +194,12 @@ const screenStack = requireElement<HTMLDivElement>('#screen-stack');
 const boardOverlay = requireElement<HTMLDivElement>('#board-overlay');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
+const yakOverlay = requireElement<HTMLDivElement>('#yak-overlay');
+const adwareOverlay = requireElement<HTMLDivElement>('#adware-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
 const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
+const assistOverlay = requireElement<HTMLDivElement>('#assist-overlay');
 const handOverlay = requireElement<HTMLDivElement>('#hand-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
@@ -221,6 +230,9 @@ const svgWheel = mountSvgWheel(wheelOverlay, wheelPegs);
 const svgBoard = mountSvgBoard(boardOverlay);
 const svgAlphabet = mountSvgAlphabet(alphabetOverlay);
 const svgHud = mountSvgHud(plateOverlay, hudOverlay);
+const svgYak = mountSvgYakubovich(yakOverlay);
+const svgAdware = mountSvgAdware(adwareOverlay);
+const svgAssist = mountSvgAssist(assistOverlay);
 const svgHand = mountSvgHand(handOverlay);
 
 // ------------------------------------------------------------ session state
@@ -443,7 +455,11 @@ async function gameLoop(): Promise<void> {
     const machine: Machine = { screen, input, audio, clock, rng, signal };
     const state = createDebugState();
     currentRun = { controller, input, audio, state };
-    const assistBlit: { current: { ofs: number; spriteId: number } | null } = { current: null };
+    if (spriteLib) {
+      svgAssist.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
+      svgYak.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
+      svgAdware.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
+    }
 
     const presenter = new CanvasPresenter(
       screen,
@@ -459,20 +475,7 @@ async function gameLoop(): Promise<void> {
           punchWheelHole(rgba, null);
         }
         if (!boardOverlay.hidden) {
-          let boardKeep = null;
-          if (assistBlit.current) {
-            const assistSprite = screen.getSprite(assistBlit.current.spriteId);
-            if (assistSprite) {
-              boardKeep = {
-                ofs: assistBlit.current.ofs,
-                width: assistSprite.width,
-                height: assistSprite.height,
-                pixels: assistSprite.pixels,
-                transparent: 2,
-              };
-            }
-          }
-          punchOverlayHoles(rgba, boardKeep);
+          punchOverlayHoles(rgba);
         }
       },
     );
@@ -497,7 +500,9 @@ async function gameLoop(): Promise<void> {
         options: { humanSeats },
         wheel: svgWheel,
         board: svgBoard,
-        assistBlit,
+        assist: svgAssist,
+        yak: svgYak,
+        adware: svgAdware,
         alphabet: svgAlphabet,
         hud: svgHud,
         hand: svgHand,
@@ -522,6 +527,10 @@ async function gameLoop(): Promise<void> {
       svgAlphabet.setVisible(false);
       svgHud.setVisible(false);
       svgHud.hideBubbles();
+      svgHud.setNameEntry(null);
+      svgAssist.setVisible(false);
+      svgYak.setVisible(false);
+      svgAdware.setVisible(false);
       svgHand.setVisible(false);
       currentRun = null;
     }

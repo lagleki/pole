@@ -4,6 +4,7 @@
  */
 import { SCREEN_W, VISIBLE_H } from '../engine/types';
 import { liveSeat } from './constants';
+import { snickersBarArtMarkup } from './svgSnickers';
 import { svgWheelLayout } from './svgWheel';
 
 export const PLATE_W = 108;
@@ -25,6 +26,16 @@ export interface HudSeat {
   caption: string;
   name: string;
   present: boolean;
+  /** null hides the pile (empty seat). 0 shows the empty-score candy. */
+  score: number | null;
+  /** Recount jitter, DOS wrap offsets mapped to x/y. */
+  jitter?: { x: number; y: number };
+}
+
+export interface HudNameEntry {
+  seat: number;
+  text: string;
+  caret: boolean;
 }
 
 export interface SpriteBox {
@@ -37,6 +48,7 @@ export interface SpriteBox {
 export interface HudView {
   setVisible(visible: boolean): void;
   setSeats(seats: readonly HudSeat[], blink?: { seat: number; on: boolean }): void;
+  setNameEntry(entry: HudNameEntry | null): void;
   showTalk(box: SpriteBox, text: string, side: 'west' | 'east'): void;
   showChoice(box: SpriteBox, left: string, right: string): void;
   hideBubbles(): void;
@@ -202,7 +214,82 @@ function plateMarkup(seatIdx: number): string {
       <rect width="${PLATE_W}" height="${PLATE_H}" rx="2.2" fill="url(#hud-plate)" stroke="#6a7382" stroke-width="0.7"/>
       <text class="hud-caption" x="${PLATE_W / 2}" y="8" dominant-baseline="central" text-anchor="middle"></text>
       <text class="hud-name" x="${PLATE_W / 2}" y="20" dominant-baseline="central" text-anchor="middle"></text>
+      <rect class="hud-caret" x="0" y="24" width="6" height="2" fill="#ffffff" display="none"/>
     </g>`;
+}
+
+function moneyGroupMarkup(seatIdx: number): string {
+  const { x, y } = ofsXy(liveSeat(seatIdx).moneyOfs);
+  return `<g class="hud-money" data-seat="${seatIdx}" transform="translate(${x} ${y})" display="none"></g>`;
+}
+
+/** Original MONEY sprite is 73×24; SVG note is a bit larger so the green reads. */
+export const BILL_W = 76;
+export const BILL_H = 24;
+export const BILL_STACK_DY = 3.2;
+export const BILL_STACK_DX = 1.4;
+export const BILL_MAX = 10;
+
+/**
+ * Dollar-bill mark adapted from Twemoji 1f4b5
+ * (https://github.com/twitter/twemoji, CC-BY 4.0).
+ * Simple rects/ellipse — not <use>/nested <svg>, so it stays green after DOMParser insert.
+ */
+export function usdBillArtMarkup(): string {
+  return `<rect width="${BILL_W}" height="${BILL_H}" rx="2.2" fill="#3e8f3a"/>
+      <rect x="1.4" y="1.4" width="${BILL_W - 2.8}" height="${BILL_H - 2.8}" rx="1.5"
+            fill="#6fbf63" stroke="#2d6b2c" stroke-width="0.7"/>
+      <ellipse cx="${BILL_W * 0.72}" cy="${BILL_H / 2}" rx="9" ry="7.2" fill="#4ea34a"/>
+      <rect x="${BILL_W * 0.36}" y="1.4" width="10" height="${BILL_H - 2.8}" fill="#f3d48a"/>
+      <text x="${BILL_W * 0.18}" y="${BILL_H / 2 + 0.6}" fill="#2d6b2c" stroke="none"
+            font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="central">$</text>`;
+}
+
+function billInstanceMarkup(dx: number, dy: number, tilt: number): string {
+  return `<g class="hud-bill" fill="none" stroke="none" transform="translate(${dx.toFixed(1)} ${dy.toFixed(1)}) rotate(${tilt} ${BILL_W / 2} ${BILL_H / 2})">
+      ${usdBillArtMarkup()}
+    </g>`;
+}
+
+export function moneyStackCount(score: number): number {
+  if (score <= 0) {
+    return 0;
+  }
+  return Math.min(BILL_MAX, Math.max(1, Math.ceil(score / 500)));
+}
+
+/** Top-bill local origin after stack offsets (jitter applied to the top note). */
+export function moneyTopBillOrigin(n: number, jitter?: { x: number; y: number }): { x: number; y: number } {
+  const jx = jitter?.x ?? 0;
+  const jy = jitter?.y ?? 0;
+  return {
+    x: (n - 1) * BILL_STACK_DX + jx,
+    y: -(n - 1) * BILL_STACK_DY + jy,
+  };
+}
+
+export function moneyStackMarkup(score: number, jitter?: { x: number; y: number }): string {
+  if (score <= 0) {
+    const jx = jitter?.x ?? 0;
+    const jy = jitter?.y ?? 0;
+    return `<g class="hud-candy" transform="translate(${jx.toFixed(1)} ${jy.toFixed(1)})">
+      ${snickersBarArtMarkup()}
+    </g>`;
+  }
+  const n = moneyStackCount(score);
+  const bills: string[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const dx = i * BILL_STACK_DX + (i === n - 1 ? (jitter?.x ?? 0) : 0);
+    const dy = -i * BILL_STACK_DY + (i === n - 1 ? (jitter?.y ?? 0) : 0);
+    const tilt = ((i % 3) - 1) * 1.2;
+    bills.push(billInstanceMarkup(dx, dy, tilt));
+  }
+  const top = moneyTopBillOrigin(n, jitter);
+  const cx = top.x + BILL_W / 2;
+  const cy = top.y + BILL_H / 2;
+  return `<g class="hud-bills">${bills.join('')}</g>
+    <text class="hud-score" x="${cx.toFixed(1)}" y="${cy.toFixed(1)}"
+          text-anchor="middle" dominant-baseline="central">${escapeSvgText(String(score))}</text>`;
 }
 
 function svgShell(inner: string): string {
@@ -231,6 +318,9 @@ export function buildHudSvg(): string {
          font-family="PT Mono, ui-monospace, monospace" font-weight="700"
          font-size="9" fill="#ffffff">
         ${plateMarkup(0)}${plateMarkup(1)}${plateMarkup(2)}
+      </g>
+      <g id="hud-money-row" font-family="PT Mono, ui-monospace, monospace" font-weight="700">
+        ${moneyGroupMarkup(0)}${moneyGroupMarkup(1)}${moneyGroupMarkup(2)}
       </g>`);
 }
 
@@ -239,16 +329,65 @@ export function buildBubbleSvg(): string {
          font-size="11" fill="#1a1520"></g>`);
 }
 
+const NAME_FONT = 9;
+const NAME_CHAR_EM = 0.62;
+const NAME_PAD_X = 8;
+const NAME_CARET_Y = 24;
+
+export function setSvgChildren(host: SVGElement, markup: string): void {
+  const parsed = new DOMParser().parseFromString(
+    `<svg xmlns="http://www.w3.org/2000/svg">${markup}</svg>`,
+    'image/svg+xml',
+  );
+  const root = parsed.documentElement;
+  host.replaceChildren();
+  if (root.querySelector('parsererror')) {
+    return;
+  }
+  for (const node of [...root.childNodes]) {
+    host.appendChild(host.ownerDocument.importNode(node, true));
+  }
+}
+
+export function nameCaretX(text: string): number {
+  return NAME_PAD_X + text.length * NAME_FONT * NAME_CHAR_EM;
+}
+
 export function mountSvgHud(plateHost: HTMLElement, bubbleHost: HTMLElement): HudView {
   plateHost.innerHTML = buildHudSvg();
   bubbleHost.innerHTML = buildBubbleSvg();
   plateHost.hidden = true;
   bubbleHost.hidden = true;
   const plates = [...plateHost.querySelectorAll<SVGGElement>('.hud-plate')];
+  const moneyGroups = [...plateHost.querySelectorAll<SVGGElement>('.hud-money')];
   const bubbles = bubbleHost.querySelector<SVGGElement>('#hud-bubbles');
   if (!bubbles) {
     throw new Error('SVG HUD bubbles missing');
   }
+  let nameEntry: HudNameEntry | null = null;
+
+  const paintName = (plate: SVGGElement, seatIdx: number, name: string, present: boolean): void => {
+    const nameEl = plate.querySelector<SVGTextElement>('.hud-name');
+    const caret = plate.querySelector<SVGRectElement>('.hud-caret');
+    if (!nameEl || !caret) {
+      return;
+    }
+    const entry = nameEntry;
+    const editing = entry !== null && entry.seat === seatIdx;
+    const shown = editing ? entry.text : present ? name : '';
+    nameEl.textContent = shown;
+    if (editing) {
+      nameEl.setAttribute('text-anchor', 'start');
+      nameEl.setAttribute('x', String(NAME_PAD_X));
+      caret.setAttribute('x', nameCaretX(shown).toFixed(1));
+      caret.setAttribute('y', String(NAME_CARET_Y));
+      caret.setAttribute('display', entry.caret ? 'inline' : 'none');
+    } else {
+      nameEl.setAttribute('text-anchor', 'middle');
+      nameEl.setAttribute('x', String(PLATE_W / 2));
+      caret.setAttribute('display', 'none');
+    }
+  };
 
   return {
     setVisible(visible: boolean): void {
@@ -258,6 +397,7 @@ export function mountSvgHud(plateHost: HTMLElement, bubbleHost: HTMLElement): Hu
     setSeats(seats, blink): void {
       for (let i = 0; i < plates.length; i += 1) {
         const plate = plates[i];
+        const money = moneyGroups[i];
         const seat = seats[i];
         if (!plate) {
           continue;
@@ -267,13 +407,38 @@ export function mountSvgHud(plateHost: HTMLElement, bubbleHost: HTMLElement): Hu
         plate.classList.toggle('is-blink', blink?.seat === i && blink.on);
         plate.setAttribute('display', present ? 'inline' : 'none');
         const caption = plate.querySelector('.hud-caption');
-        const name = plate.querySelector('.hud-name');
         if (caption) {
           caption.textContent = present ? (seat?.caption ?? '') : '';
         }
-        if (name) {
-          name.textContent = present ? (seat?.name ?? '') : '';
+        paintName(plate, i, seat?.name ?? '', present);
+        if (money) {
+          const score = seat?.score ?? null;
+          if (!present || score === null) {
+            money.setAttribute('display', 'none');
+            money.replaceChildren();
+          } else {
+            money.setAttribute('display', 'inline');
+            setSvgChildren(money, moneyStackMarkup(score, seat.jitter));
+          }
         }
+      }
+    },
+    setNameEntry(entry): void {
+      nameEntry = entry;
+      if (entry) {
+        const plate = plates[entry.seat];
+        if (plate) {
+          paintName(plate, entry.seat, entry.text, true);
+        }
+        return;
+      }
+      for (let i = 0; i < plates.length; i += 1) {
+        const plateEl = plates[i];
+        if (!plateEl) {
+          continue;
+        }
+        const nameEl = plateEl.querySelector<SVGTextElement>('.hud-name');
+        paintName(plateEl, i, nameEl?.textContent ?? '', plateEl.getAttribute('display') !== 'none');
       }
     },
     showTalk(box, text, side): void {
