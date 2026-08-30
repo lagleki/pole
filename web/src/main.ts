@@ -98,17 +98,17 @@ app.innerHTML = `
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
           <div id="studio-overlay" class="studio-overlay" hidden></div>
-          <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
-          <div id="studio-light-overlay" class="studio-light-overlay" hidden></div>
           <div id="board-overlay" class="board-overlay" hidden></div>
-          <div id="plate-overlay" class="plate-overlay" hidden></div>
-          <div id="yak-overlay" class="yak-overlay" hidden></div>
-          <div id="wheel-overlay" class="wheel-overlay" hidden></div>
-          <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
-          <div id="wheel-pegs" class="wheel-pegs" hidden></div>
-          <div id="hud-overlay" class="hud-overlay" hidden></div>
           <div id="assist-overlay" class="assist-overlay" hidden></div>
           <div id="walls-overlay" class="walls-overlay" hidden></div>
+          <div id="wheel-overlay" class="wheel-overlay" hidden></div>
+          <div id="alphabet-overlay" class="alphabet-overlay" hidden></div>
+          <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
+          <div id="studio-light-overlay" class="studio-light-overlay" hidden></div>
+          <div id="plate-overlay" class="plate-overlay" hidden></div>
+          <div id="yak-overlay" class="yak-overlay" hidden></div>
+          <div id="wheel-pegs" class="wheel-pegs" hidden></div>
+          <div id="hud-overlay" class="hud-overlay" hidden></div>
           <div id="boxes-overlay" class="boxes-overlay" hidden></div>
           <div id="adware-overlay" class="adware-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>

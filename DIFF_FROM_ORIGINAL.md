@@ -163,9 +163,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     overlay stack above the host, not under him on the canvas.
     Studio wallpaper is SVG too: a 12×3 geometric brick grid (three tile
     kinds, seeded RNG as DIFF #15; restore still uses i%3), hanging lamps
-    and side walls as vertical rectangles (DOS 40×139) in a front overlay so the
-    assistant walks full-width (x=0…640) between the back wall and the side walls —
-    not BRICK*/LAMP/WALL_* blits.
+    and side walls as vertical rectangles (DOS 40×139) in the scenic stack under
+    the canvas so the assistant walks full-width (x=0…640) between the back wall
+    and the side walls without covering players/HUD — not BRICK*/LAMP/WALL_* blits.
     Шкатулки are the three original BOX_* sprites as an SVG overlay that
     translates in, rather than a screenCopy over the player.
     The hub is 8 px left of the DOS cell

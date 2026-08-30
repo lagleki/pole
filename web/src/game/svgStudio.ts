@@ -1,8 +1,9 @@
 /**
- * SVG studio chrome (DIFF #19). Depth, back to front:
- *   1. full-width festive back wall (sky blue + peach/mint swirls + soft brick tiles)
- *   2. assistant walk plane (x = 0 … SCREEN_W at y = 25)
- *   3. side walls in a front overlay so she passes between wall layers
+ * SVG studio chrome (DIFF #19). Scenic stack (all behind canvas/HUD):
+ *   1. full-width back wall (bricks + swirls + lamps)
+ *   2. marble board overlay
+ *   3. assistant walk (x = 0 … SCREEN_W at y = 25)
+ *   4. side walls (she passes between 1/2 and these)
  * Brick kinds still follow DIFF #15 (seeded RNG, restore uses i%3).
  */
 import type { PaletteColor } from '../spec/types';
