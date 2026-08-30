@@ -211,6 +211,8 @@ class Game {
   private resumeAtLetterPick: { awardKind: 'perHit' | 'double' | 'keep'; awardUnit: number } | null = null;
   /** WEB: resume straight to round-end (word already solved). */
   private resumeAtRoundWon = false;
+  /** WEB: between-rounds reload — keep seat names/scores, skip re-presentation. */
+  private resumingBetweenRounds = false;
 
   constructor(ctx: GameContext) {
     this.humanSeats = ctx.options?.humanSeats ?? 1;
@@ -397,6 +399,9 @@ class Game {
     this.winner = save.winner;
     this.stage = save.stage;
     this.curPlayer = save.curPlayer;
+    if (save.winner >= 3 && (save.checkpoint === 'between-rounds' || save.checkpoint === 'word-solved')) {
+      this.winner = save.curPlayer;
+    }
     this.movesForBox = save.movesForBox;
     this.m.rng.seed(save.rngState);
     for (let i = 0; i < this.characters.length; i += 1) {
@@ -429,6 +434,7 @@ class Game {
       ? { awardKind: save.awardKind ?? 'keep', awardUnit: save.awardUnit ?? 0 }
       : null;
     this.resumeAtRoundWon = save.checkpoint === 'word-solved';
+    this.resumingBetweenRounds = save.checkpoint === 'between-rounds';
     this.syncDebug();
   }
 
@@ -1002,18 +1008,17 @@ class Game {
   /** dpr:990-1037 */
   private async stageSetup(): Promise<void> {
     this.setScene('stage-setup');
-    if (this.stage === 7) {
-      this.playSfx('superGame');
-      this.playSfx('super60s');
-    } else if (this.stage > 0) {
+    if (this.stage > 0) {
       this.playSfx('sting');
     }
     const s = this.screen;
     this.drawBoardChrome();
 
-    for (let i = 0; i <= 2; i += 1) {
-      if (i !== this.winner) {
-        this.seats[i].nameBytes = new Uint8Array(0);
+    if (!this.resumingBetweenRounds) {
+      for (let i = 0; i <= 2; i += 1) {
+        if (i !== this.winner) {
+          this.seats[i].nameBytes = new Uint8Array(0);
+        }
       }
     }
     this.ctx.hud?.hideBubbles();
@@ -1038,7 +1043,7 @@ class Game {
     this.seats[0].spriteId = saved;
     this.stopSfx('opening');
     this.stopSfx('openingOld');
-    this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME });
+    this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
     // WEB DIFF #27: TV studio open (Wikiquote catchphrase + calendar weekday).
     if (this.stage === 0) {
       for (const line of firstTourGreeting(broadcastWeekday())) {
@@ -1046,14 +1051,44 @@ class Game {
       }
       await this.yakubovichTalk(firstTourInvite());
     } else {
-      await this.delay(4000);
+      if (this.resumingBetweenRounds) {
+        await this.delay(800);
+      } else {
+        await this.delay(4000);
+      }
       await this.yakubovichTalk(laterTourGreeting(this.stage));
       await this.yakubovichTalk(laterTourInvite(this.stage));
     }
   }
 
+  /** Reload at between-rounds: redraw saved seats without wiping names or re-prompting. */
+  private async presentationFromSave(): Promise<void> {
+    this.setScene('presentation');
+    const s = this.screen;
+    for (let j = 0; j <= 2; j += 1) {
+      const seat = this.seats[j];
+      const layout = liveSeat(j);
+      if (j !== this.winner) {
+        seat.score = 0;
+      }
+      if (seat.spriteId !== null) {
+        s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+      }
+      this.paintScore(j);
+    }
+    this.drawFortuneWheel(this.curSector);
+    this.syncHud(true);
+    this.syncDebug();
+    this.winner = 3;
+    this.resumingBetweenRounds = false;
+  }
+
   /** dpr:1040-1087 */
   private async presentation(): Promise<void> {
+    if (this.resumingBetweenRounds) {
+      await this.presentationFromSave();
+      return;
+    }
     this.setScene('presentation');
     const s = this.screen;
     const { input } = this.m;
@@ -1183,6 +1218,8 @@ class Game {
   /** dpr:1125-1189. DOS: offered to human seats only (deviation #5). */
   private async boxGame(): Promise<void> {
     this.setScene('box-game');
+    this.playSfx('superGame');
+    this.playSfx('super60s');
     const s = this.screen;
     const seat = this.seats[this.curPlayer];
     const { talkBubbleOfs } = liveSeat(this.curPlayer);
@@ -1252,6 +1289,8 @@ class Game {
       s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
       await this.updateMoney(this.curPlayer, seat.score);
     }
+    this.stopSfx('superGame');
+    this.stopSfx('super60s');
     this.movesForBox = 0;
   }
 
@@ -1671,6 +1710,7 @@ class Game {
       if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Скажу слово!', 'Кручу барабан!')) === 0) {
         const result = await this.tellWord();
         if (result === 'won') {
+          this.winner = this.curPlayer;
           this.persistCheckpoint('word-solved');
           return 'won';
         }
@@ -1924,6 +1964,9 @@ class Game {
       if (this.resumeAtRoundWon) {
         // Restored from 'word-solved' checkpoint: word already named, skip turn
         // loop and round-end ceremony — winner is already set from applyResume.
+        if (this.winner >= 3) {
+          this.winner = this.curPlayer;
+        }
         this.resumeAtRoundWon = false;
       } else {
         let roundWon = false;

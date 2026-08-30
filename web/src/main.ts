@@ -73,7 +73,7 @@ app.innerHTML = `
 
     <section id="play-view" class="play-panel">
       <div class="crt-frame">
-        <div class="screen-stack">
+        <div id="screen-stack" class="screen-stack">
           <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
           <div id="plate-overlay" class="plate-overlay" hidden></div>
           <div id="wheel-overlay" class="wheel-overlay" hidden></div>
@@ -168,6 +168,7 @@ function requireElement<T extends Element>(selector: string): T {
 }
 
 const canvas = requireElement<HTMLCanvasElement>('#screen');
+const screenStack = requireElement<HTMLDivElement>('#screen-stack');
 const audioGate = requireElement<HTMLButtonElement>('#audio-gate');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
@@ -279,8 +280,7 @@ function setSoundEnabled(value: boolean): void {
   }
   if (value) {
     audioOutput.unlock().catch(() => {});
-    hostTts.prime();
-    void gameSfx.prime();
+    void Promise.all([hostTts.prime(), gameSfx.prime()]);
   } else {
     hostTts.cancel();
     gameSfx.stop();
@@ -502,8 +502,7 @@ function unlockAudio(): void {
   audioOutput.unlock().catch(() => {
     // Autoplay policy may reject before the first gesture; harmless.
   });
-  hostTts.prime();
-  void gameSfx.prime();
+  void Promise.all([hostTts.prime(), gameSfx.prime()]);
 }
 
 function skipAudioGate(): boolean {
@@ -513,7 +512,7 @@ function skipAudioGate(): boolean {
 async function waitForAudioGesture(): Promise<void> {
   if (skipAudioGate()) {
     unlockAudio();
-    await gameSfx.prime();
+    await Promise.all([hostTts.prime(), gameSfx.prime()]);
     return;
   }
   audioGate.hidden = false;
@@ -531,7 +530,7 @@ async function waitForAudioGesture(): Promise<void> {
     audioGate.addEventListener('pointerdown', go);
     audioGate.addEventListener('click', go);
   });
-  await gameSfx.prime();
+  await Promise.all([hostTts.prime(), gameSfx.prime()]);
 }
 
 function toggleFullscreen(): void {
@@ -539,7 +538,7 @@ function toggleFullscreen(): void {
   if (document.fullscreenElement) {
     void document.exitFullscreen().catch(() => {});
   } else {
-    void canvas.requestFullscreen().catch(() => {});
+    void screenStack.requestFullscreen().catch(() => {});
   }
 }
 

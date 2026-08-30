@@ -26,7 +26,8 @@ export type TtsRole = 'host' | 'male' | 'female';
 export interface HostTts {
   speak(text: string, role?: TtsRole): HostSpeech;
   cancel(): void;
-  prime(): void;
+  /** Unlock `<audio>` playback on a user gesture; safe to call again. */
+  prime(): Promise<void>;
 }
 
 const ENDS_WITH_PUNCT = /[,:;—.–!?…]$/;
@@ -427,16 +428,16 @@ export function createHostTts(options: HostTtsOptions): HostTts {
   };
 
   return {
-    prime(): void {
+    prime(): Promise<void> {
       log('prime (user gesture)');
       if (player && !player.paused && player.currentSrc && !player.currentSrc.startsWith('data:')) {
         log('prime: already playing');
-        return;
+        return Promise.resolve();
       }
       if (player) {
         const prev = player.src;
         player.src = SILENT_WAV;
-        void player.play().then(
+        return player.play().then(
           () => {
             player.pause();
             if (pending && options.getEnabled()) {
@@ -453,11 +454,11 @@ export function createHostTts(options: HostTtsOptions): HostTts {
             }
           },
         );
-        return;
       }
       if (pending && options.getEnabled()) {
         dispatch(pending, pendingRole);
       }
+      return Promise.resolve();
     },
 
     cancel(): void {
