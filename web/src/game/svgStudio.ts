@@ -397,6 +397,26 @@ function wallDefsMarkup(): string {
       </linearGradient>`;
 }
 
+/** Permanent 640×350 underlay: light gray “floor” with horizontal board lines. */
+export function buildStageBackdropSvg(): string {
+  const base = '#d8d8d8';
+  const line = '#b8b8b8';
+  const step = 8;
+  const lines: string[] = [];
+  for (let y = step; y < VISIBLE_H; y += step) {
+    lines.push(`<line x1="0" y1="${y}" x2="${SCREEN_W}" y2="${y}" stroke="${line}" stroke-width="1"/>`);
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SCREEN_W} ${VISIBLE_H}"
+      width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <rect width="${SCREEN_W}" height="${VISIBLE_H}" fill="${base}"/>
+      <g id="stage-floor-lines" stroke-linecap="square">${lines.join('')}</g>
+    </svg>`;
+}
+
+export function mountStageBackdrop(host: HTMLElement): void {
+  host.innerHTML = buildStageBackdropSvg();
+}
+
 export function buildStudioSvg(kinds: readonly number[] = restoredBrickKinds()): string {
   const back = backWallRect();
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"

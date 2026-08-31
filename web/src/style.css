@@ -180,6 +180,7 @@ body::after {
 .screen-stack {
   position: relative;
   width: 100%;
+  aspect-ratio: 640 / 350;
   line-height: 0;
   background: black;
   border-radius: 4px;
@@ -188,6 +189,40 @@ body::after {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  overflow: hidden;
+}
+
+.stage-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.stage-backdrop svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#legacy-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border-radius: 4px;
+  image-rendering: -webkit-optimize-contrast; /* older WebKit */
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+#legacy-canvas[hidden] {
+  display: none;
 }
 
 /* Canvas + SVG overlays share one letterboxed stage in fullscreen. */
@@ -201,30 +236,11 @@ body::after {
 }
 
 .screen-stack:fullscreen #legacy-canvas,
-.screen-stack:-webkit-full-screen #legacy-canvas {
+.screen-stack:-webkit-full-screen #legacy-canvas,
+.screen-stack:fullscreen .stage-backdrop,
+.screen-stack:-webkit-full-screen .stage-backdrop {
   width: 100%;
   height: 100%;
-  aspect-ratio: auto;
-}
-
-#legacy-canvas {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 640 / 350;
-  background: transparent;
-  border-radius: 4px;
-  image-rendering: -webkit-optimize-contrast; /* older WebKit */
-  image-rendering: crisp-edges;
-  image-rendering: pixelated;
-  pointer-events: none;
-}
-
-#legacy-canvas[hidden] {
-  display: none;
 }
 
 .audio-gate {

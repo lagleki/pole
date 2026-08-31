@@ -1276,6 +1276,7 @@ class Game {
 
   /** dpr:955-982 — one-time background, bricks, lamps, character shuffle. */
   private drawStaticBackground(): void {
+    this.ctx.present?.setMode('svg');
     const s = this.screen;
     if (!this.ctx.studio) {
       s.fillRect(0, 10, SCREEN_W, 3);
@@ -2419,6 +2420,7 @@ class Game {
     const resume = this.ctx.resume;
     if (resume) {
       this.applyResume(resume);
+      this.ctx.present?.setMode('svg');
       if (this.skipToTurns) {
         this.redrawRestoredRound();
       } else {

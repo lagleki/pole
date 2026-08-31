@@ -30,7 +30,7 @@ import { mountSvgAdware } from './game/svgAdware';
 import { mountSvgYakubovich } from './game/svgYakubovich';
 import { mountSvgBoxes } from './game/svgBoxes';
 import { mountSvgPlayers } from './game/svgPlayers';
-import { mountSvgStudio } from './game/svgStudio';
+import { mountSvgStudio, mountStageBackdrop } from './game/svgStudio';
 import { mountSvgWheel } from './game/svgWheel';
 import { createHostTts } from './engine/tts';
 
@@ -98,6 +98,7 @@ app.innerHTML = `
     <section id="play-view" class="play-panel">
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
+          <div id="stage-backdrop" class="stage-backdrop" aria-hidden="true"></div>
           <canvas id="legacy-canvas" width="640" height="350" hidden aria-label="Заставка и финальные экраны"></canvas>
           <div id="studio-overlay" class="studio-overlay" hidden></div>
           <div id="board-overlay" class="board-overlay" hidden></div>
@@ -202,7 +203,9 @@ function requireElement<T extends Element>(selector: string): T {
 }
 
 const legacyCanvas = requireElement<HTMLCanvasElement>('#legacy-canvas');
+const stageBackdrop = requireElement<HTMLDivElement>('#stage-backdrop');
 const screenStack = requireElement<HTMLDivElement>('#screen-stack');
+mountStageBackdrop(stageBackdrop);
 const studioOverlay = requireElement<HTMLDivElement>('#studio-overlay');
 const studioLightOverlay = requireElement<HTMLDivElement>('#studio-light-overlay');
 const boardOverlay = requireElement<HTMLDivElement>('#board-overlay');
@@ -494,7 +497,6 @@ async function gameLoop(): Promise<void> {
         svgHand.sync(handActive, hand.ofs);
       },
     );
-    presenter.setMode('legacy');
     presenter.start();
 
     const resume = persistEnabled ? loadProgress() : null;

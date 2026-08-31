@@ -25,6 +25,7 @@ import {
   brickUsesMarkup,
   brickXY,
   buildStudioLightSvg,
+  buildStageBackdropSvg,
   buildStudioSvg,
   buildWallsSvg,
   lampBulbs,
@@ -54,6 +55,16 @@ describe('svg studio', () => {
       Array.from({ length: BRICK_COUNT }, (_, i) => i % 3),
     );
     expect(BRICK_COLS).toBe(12);
+  });
+
+  it('emits a light gray stage underlay with horizontal floor lines', () => {
+    const svg = buildStageBackdropSvg();
+    expect(svg).toContain('viewBox="0 0 640 350"');
+    expect(svg).toContain('id="stage-floor-lines"');
+    expect(svg).toContain('fill="#d8d8d8"');
+    expect(svg).toContain('stroke="#b8b8b8"');
+    expect(svg.match(/<line/g)?.length).toBeGreaterThan(30);
+    expect(svg).not.toContain('id="studio-bands"');
   });
 
   it('emits geometric bricks and lamps; side walls live in a front overlay', () => {
