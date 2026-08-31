@@ -11,6 +11,9 @@ import { setSvgChildren } from './svgHud';
 import { svgWheelLayout } from './svgWheel';
 
 export const PLAYER_TRANSPARENT = 2;
+/** Max seat blit box (decision lean uses 99×83; dpr:591). */
+export const PLAYER_SEAT_W = 99;
+export const PLAYER_SEAT_H = 83;
 
 /** Unique sprite ids loaded into <defs> (lean poses + NPC roster). */
 export const PLAYER_ART_IDS: readonly number[] = [
@@ -55,6 +58,9 @@ export function buildPlayersSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
       width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
       <defs>
+        <clipPath id="player-seat-clip" clipPathUnits="userSpaceOnUse">
+          <rect width="${PLAYER_SEAT_W}" height="${PLAYER_SEAT_H}"/>
+        </clipPath>
         <clipPath id="players-under-drum" clipPathUnits="userSpaceOnUse">
           <path clip-rule="evenodd" d="${drumClipPath()}"/>
         </clipPath>
@@ -74,7 +80,12 @@ function paintSeat(el: SVGGElement, spriteId: number | null, ofs?: number): void
     setSvgShown(el, false);
     return;
   }
-  setSvgChildren(el, `<use href="#player-art-${spriteId}"/>`);
+  // Clear before swap so lean frames (99px) do not leave pixels outside the next pose.
+  setSvgChildren(el, '');
+  setSvgChildren(
+    el,
+    `<g clip-path="url(#player-seat-clip)"><use href="#player-art-${spriteId}"/></g>`,
+  );
   setSvgShown(el, true);
 }
 

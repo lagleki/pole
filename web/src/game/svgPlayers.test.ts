@@ -30,6 +30,7 @@ describe('svg players', () => {
     const svg = buildPlayersSvg();
     expect(svg).toContain('id="players-root"');
     expect(svg).toContain('id="players-under-drum"');
+    expect(svg).toContain('id="player-seat-clip"');
     expect(svg).toContain('clip-path="url(#players-under-drum)"');
     expect(svg).toContain('data-seat="0"');
     expect(svg).toContain('data-seat="2"');

@@ -1052,7 +1052,7 @@ class Game {
     for (let i = stride; i <= seat.score; i += stride) {
       if (hud) {
         this.moneyShowScore = { seat: seatIdx, score: i };
-        this.moneyJitter = { seat: seatIdx, x: this.random(12) - 4, y: this.random(7) - 1 };
+        this.moneyJitter = { seat: seatIdx, x: this.random(6) - 2, y: this.random(3) - 1 };
         this.syncHud(true);
       } else {
         for (let c = 0; c < stride; c += 1) {
@@ -1066,7 +1066,7 @@ class Game {
     if (remainder > 0) {
       if (hud) {
         this.moneyShowScore = { seat: seatIdx, score: seat.score };
-        this.moneyJitter = { seat: seatIdx, x: this.random(12) - 4, y: this.random(7) - 1 };
+        this.moneyJitter = { seat: seatIdx, x: this.random(6) - 2, y: this.random(3) - 1 };
         this.syncHud(true);
       } else {
         for (let c = 0; c < remainder; c += 1) {
@@ -1331,8 +1331,12 @@ class Game {
       for (let i = 0; i <= 2; i += 1) {
         if (i !== this.winner) {
           this.seats[i].nameBytes = new Uint8Array(0);
+          this.seats[i].spriteId = null;
+          this.seats[i].score = 0;
         }
       }
+      this.syncPlayers(true);
+      this.syncHud(true);
     }
     this.ctx.hud?.hideBubbles();
 
