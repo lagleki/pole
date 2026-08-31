@@ -199,18 +199,30 @@ export class Screen implements ScreenApi {
  * into the framebuffer (dpr:667-668), and blits rows 0..349 through the
  * 16-color palette.
  */
-export class CanvasPresenter {
+/** Live studio: SVG stack only. Legacy: splash/prize/endgame framebuffer blit. */
+export type PresentMode = 'svg' | 'legacy';
+
+export interface PlayPresenter {
+  setMode(mode: PresentMode): void;
+  start(): void;
+  stop(): void;
+}
+
+export class CanvasPresenter implements PlayPresenter {
   frame = 0;
 
   private readonly screen: Screen;
   private readonly palette: ReadonlyArray<readonly number[]>;
   private readonly getTextEntry: () => TextEntryState | null;
+  private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly imageData: ImageData;
   private rafId: number | null = null;
   private lastTime: number | null = null;
   private accumulator = 0;
+  private mode: PresentMode = 'legacy';
   private readonly afterPaletteBlit?: (rgba: Uint8ClampedArray) => void;
+  private readonly skipCaret?: () => boolean;
 
   constructor(
     screen: Screen,
@@ -218,17 +230,25 @@ export class CanvasPresenter {
     palette: ReadonlyArray<readonly number[]>,
     getTextEntry: () => TextEntryState | null,
     afterPaletteBlit?: (rgba: Uint8ClampedArray) => void,
+    skipCaret?: () => boolean,
   ) {
     this.screen = screen;
     this.palette = palette;
     this.getTextEntry = getTextEntry;
+    this.canvas = canvas;
     this.afterPaletteBlit = afterPaletteBlit;
+    this.skipCaret = skipCaret;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       throw new Error('2D context not available');
     }
     this.ctx = ctx;
     this.imageData = new ImageData(SCREEN_W, VISIBLE_H);
+  }
+
+  setMode(mode: PresentMode): void {
+    this.mode = mode;
+    this.canvas.hidden = mode !== 'legacy';
   }
 
   start(): void {
@@ -265,6 +285,9 @@ export class CanvasPresenter {
 
   /** dpr:667-668 — 8x2 underline at ofs+12*640, color alternating 7/0 every 25 frames. */
   private drawCaret(): void {
+    if (this.mode !== 'legacy' || this.skipCaret?.()) {
+      return;
+    }
     const entry = this.getTextEntry();
     if (entry && entry.bytes.length < entry.maxLen) {
       this.screen.fillRect(entry.ofs + 12 * SCREEN_W, 2, 8, (Math.floor(this.frame / 25) & 1) * 7);
@@ -272,6 +295,10 @@ export class CanvasPresenter {
   }
 
   renderOnce(): void {
+    if (this.mode !== 'legacy') {
+      this.afterPaletteBlit?.(this.imageData.data);
+      return;
+    }
     const { buffer } = this.screen;
     const rgba = this.imageData.data;
     for (let i = 0, j = 0; i < SCREEN_W * VISIBLE_H; i += 1, j += 4) {

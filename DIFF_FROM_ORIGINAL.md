@@ -146,7 +146,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
     SVG overlays sit above the rear canvas (no framebuffer punch-holes); the drum tucks
     under the letters while players and name plates are clipped by the disk so they stay
-    behind it. The alphabet row is the same SVG stack
+    behind it. Live play uses the SVG stack only (`present.setMode('svg')`); the
+    `#legacy-canvas` layer blits the framebuffer only for splash, prize, endgame and
+    top-8 (`present.setMode('legacy')`). The alphabet row is the same SVG stack
     (32 tiles, 20×18, y = 332), not the DOS LETTER_BACK sprites. Seat captions,
     names and player speech bubbles are SVG as well: a two-option prompt is two
     clouds inside the sprite box (tails inward), vertically centered on the sprite.

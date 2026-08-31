@@ -98,7 +98,7 @@ app.innerHTML = `
     <section id="play-view" class="play-panel">
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
-          <canvas id="screen" width="640" height="350" aria-label="Игровой экран"></canvas>
+          <canvas id="legacy-canvas" width="640" height="350" hidden aria-label="Заставка и финальные экраны"></canvas>
           <div id="studio-overlay" class="studio-overlay" hidden></div>
           <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="assist-overlay" class="assist-overlay" hidden></div>
@@ -201,7 +201,7 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
-const canvas = requireElement<HTMLCanvasElement>('#screen');
+const legacyCanvas = requireElement<HTMLCanvasElement>('#legacy-canvas');
 const screenStack = requireElement<HTMLDivElement>('#screen-stack');
 const studioOverlay = requireElement<HTMLDivElement>('#studio-overlay');
 const studioLightOverlay = requireElement<HTMLDivElement>('#studio-light-overlay');
@@ -485,7 +485,7 @@ async function gameLoop(): Promise<void> {
 
     const presenter = new CanvasPresenter(
       screen,
-      canvas,
+      legacyCanvas,
       defaultRenderSpec.palette,
       () => input.textEntry,
       () => {
@@ -494,6 +494,7 @@ async function gameLoop(): Promise<void> {
         svgHand.sync(handActive, hand.ofs);
       },
     );
+    presenter.setMode('legacy');
     presenter.start();
 
     const resume = persistEnabled ? loadProgress() : null;
@@ -524,6 +525,7 @@ async function gameLoop(): Promise<void> {
         hud: svgHud,
         players: svgPlayers,
         hand: svgHand,
+        present: presenter,
         persist: persistEnabled
           ? { save: saveProgress, clear: clearProgress }
           : undefined,
@@ -656,12 +658,12 @@ document.addEventListener('keyup', (event) => {
   currentRun?.input.handleKeyUp(event.key);
 });
 
-canvas.addEventListener('pointerdown', () => {
+screenStack.addEventListener('pointerdown', () => {
   unlockAudio();
   currentRun?.input.pointerDown();
 });
 
-canvas.addEventListener('pointerup', () => {
+screenStack.addEventListener('pointerup', () => {
   currentRun?.input.pointerUp();
 });
 

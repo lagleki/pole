@@ -28,6 +28,7 @@ import type { YakView } from './svgYakubovich';
 import type { BoxesView } from './svgBoxes';
 import { boxBringIn, boxClosedPair, boxReveal } from './svgBoxes';
 import type { PlayersView } from './svgPlayers';
+import type { PlayPresenter } from '../engine/screen';
 import type { StudioView } from './svgStudio';
 import {
   ASSIST_WALK_X0,
@@ -194,6 +195,8 @@ export interface GameContext {
   sfx?: GameSfx;
   /** SVG pointing hand (alphabet row + board). Tests omit and keep canvas HAND. */
   hand?: HandView;
+  /** Browser presenter: SVG studio vs legacy-canvas splash/prize/endgame. */
+  present?: PlayPresenter;
 }
 
 interface Seat {
@@ -283,7 +286,22 @@ class Game {
 
   private setScene(scene: Scene): void {
     this.ctx.state.scene = scene;
+    const legacy =
+      scene === 'splash' ||
+      scene === 'prize' ||
+      scene === 'endgame' ||
+      scene === 'top-players' ||
+      scene === 'done';
+    this.ctx.present?.setMode(legacy ? 'legacy' : 'svg');
     this.syncDebug();
+  }
+
+  /** Round snapshot for assist walk — skip when the SVG stack owns the board. */
+  private snapshotRoundToBackbuf(): void {
+    if (this.ctx.board && this.ctx.assist) {
+      return;
+    }
+    this.screen.screenCopy(SCREEN_W, 120, BACKBUF, 0);
   }
 
   private syncDebug(): void {
@@ -355,7 +373,9 @@ class Game {
   /** dpr:463-482. DIFF #19: rim/base/arrow sprites are an SVG overlay. */
   private drawFortuneWheel(a: number): void {
     const s = this.screen;
-    s.fillRect(0x3030 * 8, 172, 223, 7);
+    if (!this.ctx.wheel) {
+      s.fillRect(0x3030 * 8, 172, 223, 7);
+    }
     const seat0 = this.seats[0];
     if (!this.useSvgPlayers() && seat0.spriteId !== null) {
       s.drawSprite(seat0.spriteId, liveSeat(0).spriteOfs, 2);
@@ -628,11 +648,13 @@ class Game {
   /** Studio chrome without the original RNG brick/character shuffle. */
   private paintRestoredBackground(): void {
     const s = this.screen;
-    s.fillRect(0, 10, SCREEN_W, 3);
-    s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
-    s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
-    s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
-    s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
+    if (!this.ctx.studio) {
+      s.fillRect(0, 10, SCREEN_W, 3);
+      s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
+      s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
+      s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
+      s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
+    }
     this.brickKinds = restoredBrickKinds();
     if (!this.ctx.studio) {
       for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
@@ -646,7 +668,9 @@ class Game {
 
   private drawBoardChrome(): void {
     const s = this.screen;
-    s.fillRect(0x11580, 238, SCREEN_W, 7);
+    if (!this.ctx.studio) {
+      s.fillRect(0x11580, 238, SCREEN_W, 7);
+    }
     if (!this.ctx.studio) {
       s.drawSprite(SPRITE.WALL_LEFT, 25 * SCREEN_W, 7);
       s.drawSprite(SPRITE.WALL_RIGHT, 600 + 25 * SCREEN_W, 7);
@@ -782,14 +806,16 @@ class Game {
     this.paintWordBoard();
     this.paintSeats();
     this.drawFortuneWheel(this.curSector);
-    this.screen.screenCopy(SCREEN_W, 120, BACKBUF, 0);
+    this.snapshotRoundToBackbuf();
     this.setScene('turn');
   }
 
   /** dpr:503-509 */
   private async yakubovichSetSilent(): Promise<void> {
     const s = this.screen;
-    s.screenCopy(161, 40, 0x164df, BACKBUF + 0x164df);
+    if (!this.ctx.yak) {
+      s.screenCopy(161, 40, 0x164df, BACKBUF + 0x164df);
+    }
     await this.m.audio.speechSound();
     this.yakubovichShowIdle();
   }
@@ -864,7 +890,9 @@ class Game {
       await this.delay(180);
     }
     await mark;
-    s.screenCopy(161, 40, BACKBUF + 0x164df, 0x164df);
+    if (!this.ctx.yak) {
+      s.screenCopy(161, 40, BACKBUF + 0x164df, 0x164df);
+    }
     this.yakubovichShowIdle();
   }
 
@@ -919,7 +947,9 @@ class Game {
       await this.delay(this.random(2) * 50 + 100);
     }
 
-    s.screenCopy(161, 40, BACKBUF + 0x164df, 0x164df);
+    if (!this.ctx.yak) {
+      s.screenCopy(161, 40, BACKBUF + 0x164df, 0x164df);
+    }
     await this.m.audio.speechSound();
     this.yakubovichShowIdle();
   }
@@ -1247,11 +1277,13 @@ class Game {
   /** dpr:955-982 — one-time background, bricks, lamps, character shuffle. */
   private drawStaticBackground(): void {
     const s = this.screen;
-    s.fillRect(0, 10, SCREEN_W, 3);
-    s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
-    s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
-    s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
-    s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
+    if (!this.ctx.studio) {
+      s.fillRect(0, 10, SCREEN_W, 3);
+      s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
+      s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
+      s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
+      s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
+    }
 
     const kinds = restoredBrickKinds();
     for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
@@ -1752,7 +1784,9 @@ class Game {
       return n;
     }
 
-    s.screenCopy(SCREEN_W, 60, BACKBUF + 0x320 * 8, 0x320 * 8);
+    if (!this.ctx.hand) {
+      s.screenCopy(SCREEN_W, 60, BACKBUF + 0x320 * 8, 0x320 * 8);
+    }
     const hand = input.hand;
     hand.step = 16;
     hand.ofs = this.wordPos - 13 * SCREEN_W;
@@ -1791,7 +1825,9 @@ class Game {
     this.setScene('letter-pick');
     const s = this.screen;
     const { input } = this.m;
-    s.screenCopy(SCREEN_W, 60, BACKBUF + 0x59b0 * 8, 0x59b0 * 8);
+    if (!this.ctx.hand) {
+      s.screenCopy(SCREEN_W, 60, BACKBUF + 0x59b0 * 8, 0x59b0 * 8);
+    }
 
     if (this.isHuman(this.curPlayer)) {
       const hand = input.hand;
@@ -1930,7 +1966,7 @@ class Game {
     if (n === 0) {
       await this.yakubovichTalk('И в этом слове есть такая буква! Откройте!');
     }
-    s.screenCopy(SCREEN_W, 120, BACKBUF, 0);
+    this.snapshotRoundToBackbuf();
 
     // WEB: beat after the host confirms, then the assistant leaves the wings.
     await this.delay(1000);
