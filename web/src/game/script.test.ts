@@ -127,25 +127,28 @@ async function driveFullGame(h: Harness, maxRounds = 6000, until?: () => boolean
 }
 
 describe('full game script (headless, virtual time, real assets)', () => {
-  it('plays an entire 8-stage all-NPC game to the finale (seed 1)', async () => {
+  it('plays an entire 7-stage all-NPC game through the supergame to done (seed 1)', async () => {
     const h = buildHarness(1);
     await driveFullGame(h);
 
     const { state } = h.ctx;
     expect(state.scene).toBe('done');
-    expect(state.stage).toBeGreaterThanOrEqual(7);
+    expect(state.stage).toBe(7);
 
-    // Every structural scene must have been visited.
-    for (const expected of ['splash', 'stage-setup', 'presentation', 'word-select', 'turn', 'letter-pick', 'letter-open', 'adware', 'top-players', 'done'] as Scene[]) {
+    for (const expected of [
+      'splash', 'stage-setup', 'presentation', 'word-select', 'turn', 'letter-pick',
+      'letter-open', 'adware', 'supergame-setup', 'supergame-prizes', 'supergame-choice',
+      'supergame-spin', 'supergame-letters', 'supergame-think', 'supergame-solve',
+      'top-players', 'done',
+    ] as Scene[]) {
       expect(h.sceneHistory).toContain(expected);
     }
-    // DOS policy: NPCs never enter the box game, prize ceremony, or word solve.
     expect(h.sceneHistory).not.toContain('box-game');
     expect(h.sceneHistory).not.toContain('prize');
     expect(h.sceneHistory).not.toContain('word-solve');
 
-    // 8 stage setups, one per tournament stage.
-    expect(h.sceneHistory.filter((s) => s === 'stage-setup')).toHaveLength(8);
+    expect(h.sceneHistory.filter((s) => s === 'stage-setup')).toHaveLength(7);
+    expect(state.supergame).toBeDefined();
 
     // Session leaderboard stays within the original bounds.
     expect(h.topPlayers.length).toBeLessThanOrEqual(8);

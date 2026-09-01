@@ -15,6 +15,8 @@ import {
   PRIZES,
   SEATS,
   STAGE_NAMES,
+  SUPERGAME_BANNER,
+  TOURNAMENT_ROUNDS,
   liveSeat,
 } from './constants';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
@@ -38,7 +40,10 @@ import {
   restoredBrickKinds,
 } from './svgStudio';
 import type { WheelView } from './svgWheel';
-import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday } from './hostIntro';
+import type { SupergameHudView } from './svgSupergameHud';
+import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday, supergameGreeting, supergamePrizeIntro } from './hostIntro';
+import { buildPrizeBasket, basketTotal, type SupergamePrize } from './supergamePrizes';
+import { superWheelPrizes } from './superWheel';
 import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
 
 /**
@@ -116,6 +121,13 @@ export type Scene =
   | 'prize'
   | 'adware'
   | 'round-end'
+  | 'supergame-setup'
+  | 'supergame-prizes'
+  | 'supergame-choice'
+  | 'supergame-spin'
+  | 'supergame-letters'
+  | 'supergame-think'
+  | 'supergame-solve'
   | 'endgame'
   | 'top-players'
   | 'done';
@@ -140,6 +152,12 @@ export interface GameDebugState {
   seats: SeatDebug[];
   winner: number;
   movesForBox: number;
+  supergame?: {
+    basket: SupergamePrize[];
+    superPrize: string;
+    atRisk: boolean;
+    won: boolean | null;
+  };
 }
 
 export interface GameOptions {
@@ -197,6 +215,8 @@ export interface GameContext {
   hand?: HandView;
   /** Browser presenter: SVG studio vs legacy-canvas splash/prize/endgame. */
   present?: PlayPresenter;
+  /** Supergame prize list + think timer (DIFF #31). */
+  supergameHud?: SupergameHudView;
 }
 
 interface Seat {
@@ -242,7 +262,7 @@ class Game {
   private curPlayer = 0;
   /** DOS: successful MOVES toward the box game (Delphi counted letters; deviation #4). */
   private movesForBox = 0;
-  private readonly prevWords: number[] = new Array(8).fill(-1);
+  private readonly prevWords: number[] = new Array(TOURNAMENT_ROUNDS).fill(-1);
 
   private guessedWord: Uint8Array = new Uint8Array(0);
   private remaindLetters = 0;
@@ -271,6 +291,16 @@ class Game {
   private resumeAtRoundWon = false;
   /** WEB: between-rounds reload — keep seat names/scores, skip re-presentation. */
   private resumingBetweenRounds = false;
+  /** WEB DIFF #31: post-finals supergame state. */
+  private stageBanner: string | null = null;
+  private supergameActive = false;
+  private supergamePlayer = -1;
+  private supergameBasket: SupergamePrize[] = [];
+  private superPrize = '';
+  private supergameWon: boolean | null = null;
+  private supergameAtRisk = false;
+  private superSector = 0;
+  private wheelSuperMode = false;
 
   constructor(ctx: GameContext) {
     this.humanSeats = ctx.options?.humanSeats ?? 1;
@@ -325,6 +355,16 @@ class Game {
     }));
     s.winner = this.winner;
     s.movesForBox = this.movesForBox;
+    if (this.supergameBasket.length > 0 || this.superPrize || this.supergameAtRisk || this.supergameWon !== null) {
+      s.supergame = {
+        basket: this.supergameBasket.map((item) => ({ ...item })),
+        superPrize: this.superPrize,
+        atRisk: this.supergameAtRisk,
+        won: this.supergameWon,
+      };
+    } else {
+      s.supergame = undefined;
+    }
   }
 
   private isHuman(seatIdx: number): boolean {
@@ -412,7 +452,11 @@ class Game {
     if (!board) {
       return;
     }
-    board.setStage(this.stage);
+    if (this.stageBanner) {
+      board.setBanner(this.stageBanner);
+    } else {
+      board.setStage(this.stage);
+    }
     board.setWordBoard(this.wordPos, this.wordBoardCells(undefined, revealedDuringWalk, openBeforeWalk));
     board.setVisible(visible);
   }
@@ -478,7 +522,9 @@ class Game {
       this.seats.map((seat, i) => ({
         caption: liveSeat(i).caption,
         name: decodeCp866(seat.nameBytes),
-        present: seat.nameBytes.length > 0 || blink?.seat === i || this.hudIntroSeat === i,
+        present: this.supergameActive
+          ? i === this.supergamePlayer && seat.spriteId !== null
+          : seat.nameBytes.length > 0 || blink?.seat === i || this.hudIntroSeat === i,
         score:
           this.moneyShowScore?.seat === i
             ? this.moneyShowScore.score
@@ -503,7 +549,7 @@ class Game {
     }
     players.sync(
       this.seats.map((seat, i) => ({
-        spriteId: seat.spriteId,
+        spriteId: this.supergameActive && i !== this.supergamePlayer ? null : seat.spriteId,
         ofs: liveSeat(i).spriteOfs,
       })),
     );
@@ -612,7 +658,7 @@ class Game {
       };
     }
     this.available.set(Uint8Array.from(save.available));
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < TOURNAMENT_ROUNDS; i += 1) {
       this.prevWords[i] = save.prevWords[i] ?? -1;
     }
     this.guessedWord = Uint8Array.from(save.guessedWord);
@@ -695,7 +741,7 @@ class Game {
         }
         k -= 16;
       }
-      const stageName = STAGE_NAMES[this.stage];
+      const stageName = this.stageBanner ?? STAGE_NAMES[this.stage] ?? '';
       s.print(stageName, 78 * SCREEN_W + 125 + 12 * 16 - ((this.len(stageName) >> 1) << 4), 0, 14, 16);
     }
 
@@ -1362,10 +1408,7 @@ class Game {
     this.stopSfx('opening');
     this.stopSfx('openingOld');
     // Music only after the between-rounds save and studio chrome are in place.
-    if (this.stage === 7) {
-      this.playSfx('superGame');
-      this.playSfx('super60s');
-    } else if (this.stage > 0) {
+    if (this.stage > 0) {
       this.playSfx('sting');
     }
     this.playSfx('playersEnter', { volume: PLAYERS_ENTER_VOLUME, restart: true });
@@ -1519,7 +1562,7 @@ class Game {
     }
 
     let curWord: number;
-    if (questions.length >= 8) {
+    if (questions.length >= TOURNAMENT_ROUNDS) {
       // dpr:1091-1096 — retry until unused this session (Delphi deviation #12, kept).
       do {
         curWord = this.random(questions.length) + 1;
@@ -1716,7 +1759,7 @@ class Game {
       s.screenCopy(k, 31, this.wordPos, BACKBUF + this.wordPos);
     }
     this.paintWordBoard();
-    this.playSfx(this.stage === 7 ? 'wordWrongSuper' : 'wordWrong');
+    this.playSfx(this.inSupergameSolve() ? 'wordWrongSuper' : 'wordWrong');
     await this.yakubovichReply('Неправильно! Вы покидаете игру!');
     this.removePlayer();
     return 'removed';
@@ -1745,11 +1788,12 @@ class Game {
 
   /** dpr:1229-1244. DIFF #26: friction spin, ~9 s, several revolutions. */
   private async spinWheel(): Promise<void> {
-    // Same friction curve; fewer sectors ⇒ lower ω₀. No extra full turns required.
-    const totalSteps = WHEEL_SECTOR_COUNT + this.random(WHEEL_SECTOR_COUNT);
+    const sectorCount = this.ctx.wheel?.getSectorCount() ?? WHEEL_SECTOR_COUNT;
+    const stepDeg = this.ctx.wheel?.getStepDeg() ?? WHEEL_STEP_DEG;
+    const totalSteps = sectorCount + this.random(sectorCount);
     const durationMs = SPIN_DURATION_MS + this.random(SPIN_DURATION_JITTER_MS);
-    const startDeg = -this.curSector * WHEEL_STEP_DEG;
-    const deltaDeg = -totalSteps * WHEEL_STEP_DEG;
+    const startDeg = -this.curSector * stepDeg;
+    const deltaDeg = -totalSteps * stepDeg;
     this.playSfx('drumSpin', { loop: true });
     this.ctx.wheel?.setVisible(true);
     let elapsed = 0;
@@ -1760,7 +1804,10 @@ class Game {
       await this.delay(frame);
       elapsed += frame;
     }
-    this.curSector = (this.curSector + totalSteps) % WHEEL_SECTOR_COUNT;
+    this.curSector = (this.curSector + totalSteps) % sectorCount;
+    if (this.wheelSuperMode) {
+      this.superSector = this.curSector;
+    }
     this.drawFortuneWheel(this.curSector);
     this.stopSfx('drumSpin');
 
@@ -1770,6 +1817,10 @@ class Game {
     }
     await this.m.audio.playWav(this.audioBuf.subarray(0, k));
     this.syncDebug();
+  }
+
+  private inSupergameSolve(): boolean {
+    return this.ctx.state.scene === 'supergame-solve';
   }
 
   /**
@@ -2281,7 +2332,7 @@ class Game {
 
   /** dpr:1521-1554. DIFF #19: plaque is an SVG overlay over Yakubovich. */
   private async adware(): Promise<void> {
-    if (this.stage >= 7) {
+    if (this.stage >= TOURNAMENT_ROUNDS - 1) {
       return;
     }
     this.setScene('adware');
@@ -2335,6 +2386,243 @@ class Game {
     s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0xd1 * SCREEN_W + 0x214, 16);
   }
 
+  /** DIFF #31: post-finals supergame for the tournament winner. */
+  private async supergame(): Promise<void> {
+    if (this.winner >= 3) {
+      return;
+    }
+
+    this.supergameActive = true;
+    this.supergamePlayer = this.winner;
+    this.curPlayer = this.winner;
+    this.stageBanner = SUPERGAME_BANNER;
+    this.supergameBasket = buildPrizeBasket(this.seats[this.winner].score, {
+      nextInt: (n) => this.random(n),
+    });
+    this.persistCheckpoint('supergame');
+
+    this.setScene('supergame-setup');
+    this.drawBoardChrome();
+    this.syncPlayers(true);
+    this.syncHud(true);
+    this.playSfx('superGame');
+    this.playSfx('super60s');
+    await this.yakubovichTalk(supergameGreeting());
+    await this.yakubovichTalk(supergamePrizeIntro());
+
+    this.setScene('supergame-prizes');
+    this.ctx.supergameHud?.showPrizes(this.supergameBasket);
+    if (this.isHuman(this.winner)) {
+      await this.waitKey(INFINITE);
+    } else {
+      await this.delay(2500);
+    }
+    this.ctx.supergameHud?.hidePrizes();
+
+    this.setScene('supergame-choice');
+    const playSuper = this.isHuman(this.winner)
+      ? (await this.playerDecision('Забираю  Супер', 'ПРИЗЫ   ИГРА', 'Забираю призы!', 'Суперигра!')) > 0
+      : true;
+    if (!playSuper) {
+      this.supergameWon = null;
+      this.supergameAtRisk = false;
+      this.supergameActive = false;
+      this.stageBanner = null;
+      this.stopSfx('super60s');
+      return;
+    }
+
+    this.supergameAtRisk = true;
+    this.wheelSuperMode = true;
+    this.ctx.wheel?.setSuperMode(true);
+    this.curSector = 0;
+    this.superSector = 0;
+    this.ctx.wheel?.setFrame(0);
+
+    this.setScene('supergame-spin');
+    await this.yakubovichTalk('Вращайте барабан суперигры!');
+    if (this.isHuman(this.winner)) {
+      await this.waitKey(INFINITE);
+    }
+    await this.spinWheel();
+    this.superPrize = superWheelPrizes()[this.superSector] ?? '';
+    await this.yakubovichTalk(`Суперприз — ${this.superPrize}!`);
+
+    await this.selectSupergameWord();
+
+    const allowedLetters = Math.ceil(this.guessedWord.length / 2);
+    this.setScene('supergame-letters');
+    await this.yakubovichTalk(`Назовите ${allowedLetters} букв!`);
+    for (let i = 0; i < allowedLetters; i += 1) {
+      const letterIdx = await this.pickLetter();
+      await this.openLetter(letterIdx, 0, { kind: 'keep' });
+    }
+
+    this.setScene('supergame-think');
+    this.stopSfx('super60s');
+    this.playSfx('superGame', { restart: true });
+    this.playSfx('super60s', { loop: true, restart: true });
+    this.ctx.supergameHud?.showTimer(60);
+    for (let sec = 60; sec > 0; sec -= 1) {
+      this.ctx.supergameHud?.setTimer(sec);
+      await this.delay(1000);
+    }
+    this.stopSfx('super60s');
+    this.ctx.supergameHud?.hideTimer();
+    await this.yakubovichTalk('Время вышло! Назовите слово!');
+
+    this.setScene('supergame-solve');
+    const solved = await this.tellWordSupergame();
+    if (solved) {
+      this.supergameWon = true;
+      this.playSfx('fanfare');
+      await this.yakubovichTalk('Поздравляю! Вы выиграли суперигру!');
+      await this.yakubovichTalk(`Ваш суперприз — ${this.superPrize}!`);
+    } else {
+      this.supergameWon = false;
+      this.supergameBasket = [];
+      await this.yakubovichTalk('Увы! Призы на кон сгорают!');
+    }
+
+    this.wheelSuperMode = false;
+    this.ctx.wheel?.setSuperMode(false);
+    this.ctx.wheel?.setVisible(false);
+    this.supergameActive = false;
+    this.stageBanner = null;
+    this.syncBoard(true);
+    await this.waitKey(1500);
+    await this.yakubovichSetSilent();
+  }
+
+  private async selectSupergameWord(): Promise<void> {
+    this.setScene('word-select');
+    const s = this.screen;
+    const { questions } = this.ctx;
+    if (questions.length === 0) {
+      throw new Error('No questions loaded');
+    }
+
+    let curWord: number;
+    if (questions.length >= TOURNAMENT_ROUNDS) {
+      do {
+        curWord = this.random(questions.length) + 1;
+      } while (this.prevWords.includes(curWord));
+    } else {
+      curWord = this.random(questions.length) + 1;
+    }
+
+    const question = questions[curWord - 1];
+    this.guessedWord = encodeCp866(question.word);
+    this.remaindLetters = this.guessedWord.length;
+    this.opened = new Array(this.guessedWord.length).fill(false);
+    this.ctx.state.theme = question.theme;
+    this.wordPos = 0x19 * SCREEN_W + 121 + 12 * 16 - ((this.remaindLetters >> 1) << 4);
+
+    let j = 332 * SCREEN_W + 31 * 20;
+    for (let i = 31; i >= 0; i -= 1) {
+      this.available[i] = 0x80 + i;
+      if (!this.ctx.alphabet) {
+        s.drawSprite(SPRITE.LETTER_BACK0, j, 8);
+      }
+      j -= 20;
+    }
+    if (this.ctx.alphabet) {
+      this.syncAlphabet(true);
+    }
+
+    if (this.ctx.board) {
+      this.syncBoard(true);
+    } else {
+      for (let i = this.remaindLetters - 1; i >= 0; i -= 1) {
+        s.fillRect((i << 4) + this.wordPos + 11 * SCREEN_W, 19, 14, 8);
+      }
+    }
+
+    await this.yakubovichSetSilent();
+    await this.yakubovichTalk('И вот задание на суперигру.');
+    await this.yakubovichSetSilent();
+    await this.yakubovichTalk(question.theme);
+    await this.yakubovichSetSilent();
+    this.syncDebug();
+  }
+
+  /** Supergame word attempt — wrong answer does not remove the player (DIFF #31). */
+  private async tellWordSupergame(): Promise<boolean> {
+    this.setScene('supergame-solve');
+    const s = this.screen;
+    const { input } = this.m;
+
+    if (!this.isHuman(this.curPlayer)) {
+      const trySolve = this.remaindLetters <= Math.max(1, Math.ceil(this.guessedWord.length / 3));
+      if (trySolve && this.random(4) > 0) {
+        for (let i = 0; i < this.guessedWord.length; i += 1) {
+          this.opened[i] = true;
+        }
+        this.remaindLetters = 0;
+        this.syncBoard(true);
+        this.paintWordBoard();
+        this.playSfx('wordCorrect');
+        await this.yakubovichReply(decodeCp866(this.guessedWord), 'Ну конечно!');
+        await this.waitKey(2500);
+        await this.yakubovichSetSilent();
+        return true;
+      }
+      this.playSfx('wordWrongSuper');
+      await this.yakubovichReply('Неправильно!');
+      await this.yakubovichSetSilent();
+      return false;
+    }
+
+    const maxLen = this.guessedWord.length;
+    const entry = input.beginTextEntry(maxLen, this.wordPos + 13 * SCREEN_W + 4, 16);
+    const k = maxLen << 4;
+    const board = this.ctx.board;
+    if (board) {
+      const pollEntry = window.setInterval(() => {
+        board.setWordBoard(this.wordPos, this.wordBoardCells(new Uint8Array(entry.bytes)));
+      }, 50);
+      board.setWordBoard(this.wordPos, this.wordBoardCells(new Uint8Array(entry.bytes)));
+      await input.waitEnter(INFINITE);
+      window.clearInterval(pollEntry);
+      input.endTextEntry();
+      board.setWordBoard(this.wordPos, this.wordBoardCells());
+    } else {
+      s.screenCopy(k, 31, BACKBUF + this.wordPos, this.wordPos);
+      let j = entry.ofs - 2 * SCREEN_W - 4;
+      for (let i = maxLen; i >= 1; i -= 1) {
+        s.fillRect(j, 19, 14, 7);
+        j += 16;
+      }
+      await input.waitEnter(INFINITE);
+      input.endTextEntry();
+    }
+
+    const typed = new Uint8Array(entry.bytes);
+    const match = typed.length === this.guessedWord.length
+      && typed.every((b, idx) => b === this.guessedWord[idx]);
+    if (match) {
+      for (let i = 0; i < this.guessedWord.length; i += 1) {
+        this.opened[i] = true;
+      }
+      this.remaindLetters = 0;
+      this.syncBoard(true);
+      this.paintWordBoard();
+      this.playSfx('wordCorrect');
+      await this.yakubovichReply(decodeCp866(this.guessedWord), 'Ну конечно!');
+      await this.waitKey(2500);
+      await this.yakubovichSetSilent();
+      return true;
+    }
+    if (!this.ctx.board) {
+      s.screenCopy(k, 31, this.wordPos, BACKBUF + this.wordPos);
+    }
+    this.paintWordBoard();
+    this.playSfx('wordWrongSuper');
+    await this.yakubovichReply('Неправильно!');
+    await this.yakubovichSetSilent();
+    return false;
+  }
+
   /** dpr:1558-1646 */
   private async endgame(): Promise<void> {
     const s = this.screen;
@@ -2355,17 +2643,40 @@ class Game {
 
       const line1 = `Товарищ ${name}!`;
       s.print(line1, 0xbe * SCREEN_W + 0xf0 - (this.len(line1) << 2), 0, 14, 8);
-      const line2 = `Вы выиграли в ФИНАЛЕ и набрали ${seat.score} очков!`;
+      const line2 = this.supergameWon === true
+        ? `Вы выиграли СУПЕРИГРУ и суперприз — ${this.superPrize}!`
+        : this.supergameWon === false
+          ? `Вы набрали ${seat.score} очков. Призы на кон сгорели.`
+          : this.supergameBasket.length > 0
+            ? `Вы забрали призы на ${basketTotal(this.supergameBasket)} рублей и набрали ${seat.score} очков!`
+            : `Вы выиграли в ФИНАЛЕ и набрали ${seat.score} очков!`;
       s.print(line2, (0xbe + 0x12) * SCREEN_W + 0xf0 - (this.len(line2) << 2), 0, 14, 8);
-      s.print('Торговый дом ТУСАР и ПОЛЕ ЧУДЕС дарит Вам', 0x2354c, 0, 14, 8);
-      const prize = `${PRIZES[this.random(PRIZES.length)]} компании PROCTER & GAMBLE!`;
-      s.print(prize, (0xbe + 0x12 + 0x12 + 0x12) * SCREEN_W + 0xf0 - (this.len(prize) << 2), 0, 14, 8);
+      if (this.supergameWon === true || (this.supergameWon === null && this.supergameBasket.length > 0)) {
+        const basketLine = this.supergameWon === true
+          ? `Плюс суперприз: ${this.superPrize}`
+          : 'Ваши призы:';
+        s.print(basketLine, 0x2354c, 0, 14, 8);
+        let prizeY = 0x2354c + 0x1e * SCREEN_W;
+        for (const item of this.supergameBasket.slice(0, 4)) {
+          const line = `• ${item.name} — ${item.rubles} руб.`;
+          s.print(line, prizeY, 0, 14, 8);
+          prizeY += 0x12 * SCREEN_W;
+        }
+      } else {
+        s.print('Торговый дом ТУСАР и ПОЛЕ ЧУДЕС дарит Вам', 0x2354c, 0, 14, 8);
+        const prize = `${PRIZES[this.random(PRIZES.length)]} компании PROCTER & GAMBLE!`;
+        s.print(prize, (0xbe + 0x12 + 0x12 + 0x12) * SCREEN_W + 0xf0 - (this.len(prize) << 2), 0, 14, 8);
+      }
       s.print('За ПРИЗОМ обращайтесь по адресу:', 0x28f70, 0, 14, 8);
       s.print('101000-Ц, Москва, проезд Серова, 11', 0x2bc64, 0, 14, 8);
       s.print('На конверте сделайте пометку КОМПЬЮТЕРНЫЙ ПРИЗ', 0x2e938, 0, 14, 8);
       s.print('Автор Дима Башуров из Российского Федерального Ядерного Центра', 0x33e48, 0, 8, 8);
       s.print('Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', 0x354a0, 0, 8, 8);
-      await this.yakubovichTalk('Поздравляю! Вы выиграли финал!');
+      await this.yakubovichTalk(
+        this.supergameWon === true
+          ? 'Поздравляю! Вы выиграли суперигру!'
+          : 'Поздравляю! Вы выиграли финал!',
+      );
       await this.waitKey(INFINITE);
       await this.yakubovichSetSilent();
     }
@@ -2494,14 +2805,15 @@ class Game {
 
       await this.adware();
       this.stage += 1;
-      if (this.stage <= 7) {
+      if (this.stage < TOURNAMENT_ROUNDS) {
         this.guessedWord = new Uint8Array(0);
         this.opened = [];
         this.remaindLetters = 0;
         this.persistCheckpoint('between-rounds');
       }
-    } while (this.stage <= 7);
+    } while (this.stage < TOURNAMENT_ROUNDS);
 
+    await this.supergame();
     await this.endgame();
   }
 }

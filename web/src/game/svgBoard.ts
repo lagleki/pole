@@ -3,7 +3,7 @@
  * Live play stacks this above the rear canvas; punchOverlayHoles() remains for tests.
  */
 import { SCREEN_W, VISIBLE_H } from '../engine/types';
-import { STAGE_NAMES } from './constants';
+import { STAGE_NAMES, SUPERGAME_BANNER } from './constants';
 import { escapeSvgText } from './svgHud';
 
 /** EGA palette bytes used by the original board chrome. */
@@ -43,6 +43,7 @@ export interface BoardWordCell {
 export interface BoardView {
   setVisible(visible: boolean): void;
   setStage(stage: number): void;
+  setBanner(text: string): void;
   setWordBoard(wordPos: number, cells: readonly BoardWordCell[]): void;
 }
 
@@ -266,6 +267,9 @@ export function mountSvgBoard(host: HTMLElement): BoardView {
     },
     setStage(stage: number): void {
       stageRow.innerHTML = buildStageRowMarkup(STAGE_NAMES[stage] ?? '');
+    },
+    setBanner(text: string): void {
+      stageRow.innerHTML = buildStageRowMarkup(text || SUPERGAME_BANNER);
     },
     setWordBoard(pos: number, cells: readonly BoardWordCell[]): void {
       wordPos = pos;

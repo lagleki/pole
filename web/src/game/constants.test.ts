@@ -19,6 +19,8 @@ import {
   SECTOR_ICONS,
   SECTOR_VALUES,
   STAGE_NAMES,
+  SUPERGAME_BANNER,
+  TOURNAMENT_ROUNDS,
   WHEEL_OFFSETS,
   liveSeat,
 } from './constants';
@@ -32,7 +34,7 @@ describe('game constants (oracle data tables)', () => {
     expect(PLAYER_ROUND_NAMES).toHaveLength(3);
     expect(MONEY_VALUES).toHaveLength(4);
     expect(PRIZES).toHaveLength(10);
-    expect(STAGE_NAMES).toHaveLength(8);
+    expect(STAGE_NAMES).toHaveLength(7);
     expect(SECTOR_VALUES).toHaveLength(16);
     expect(SECTOR_ICONS).toHaveLength(16);
     expect(WHEEL_OFFSETS).toHaveLength(32);
@@ -85,7 +87,9 @@ describe('game constants (oracle data tables)', () => {
     expect(PRIZES[2]).toBe('Расчестку для усов'); // original misspelling preserved
     expect(PRIZES[9]).toBe('Пивную открывашку');
     expect(STAGE_NAMES[0]).toBe('1/64 ФИНАЛА');
-    expect(STAGE_NAMES[7]).toBe('СУПЕРФИНАЛ');
+    expect(STAGE_NAMES[6]).toBe('ФИНАЛ');
+    expect(SUPERGAME_BANNER).toBe('СУПЕРИГРА');
+    expect(TOURNAMENT_ROUNDS).toBe(7);
   });
 
   it('match SectorValues and SectorIcons (dpr:804, dpr:468)', () => {

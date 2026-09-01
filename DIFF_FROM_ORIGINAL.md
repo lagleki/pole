@@ -181,7 +181,16 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     the current weekday instead of a hardcoded Friday, «В эфире капитал-шоу
     Поле чудес!», then — over the «выход участников» bed — «под аплодисменты
     зрительного зала, я рад представить вам тройку игроков!». Later tours use
-    «И вновь в эфире…» plus a new triple; финал / суперфинал are named.
+    «И вновь в эфире…» plus a new triple; the final tour is named.
 28. **No key wait after the tour prompt.** After the host speaks the round’s
     задание, play continues into the first spin without waiting for Space.
 29. **Шкатулка pays 1000.** Guessing the box with money adds 1000, not the DOS 100.
+30. **Box game for all seats.** Шкатулки minigame is offered to every seat,
+    not only the human (DOS deviation #5).
+31. **Supergame instead of an 8th tour.** After the 7th tournament stage (ФИНАЛ)
+    the winner alone plays a TV-style supergame (DIFF #31): a procedural funny
+    prize basket (~10 000 ₽), choice «забираю призы» / «суперигра», a 7-sector
+    super-prize drum, one word with ⌈N/2⌉ free letters, a 60-second think timer
+    (`superGame` + `super60s`), then a final solve. Losing forfeits the basket;
+    winning keeps it plus the drum prize. The DOS game had no supergame — only
+    eight identical three-player tours ending in «СУПЕРФИНАЛ».

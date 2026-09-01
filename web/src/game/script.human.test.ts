@@ -151,7 +151,7 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
     }
 
     if (entry) {
-      if (state.scene === 'word-solve') {
+      if (state.scene === 'word-solve' || state.scene === 'supergame-solve') {
         const word = state.word;
         const typed = policy.solveMode === 'solve-wrong' ? (word[0] === 'А' ? 'Б' : 'А') + word.slice(1) : word;
         for (const ch of typed) {
@@ -195,6 +195,21 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
     // before the next frame. Same hold as «Кручу барабан».
     if (state.scene === 'box-game' && humanTurn) {
       await holdSpace(h);
+      continue;
+    }
+
+    if (state.scene === 'supergame-prizes') {
+      tap(h, ' ');
+      continue;
+    }
+
+    if (state.scene === 'supergame-choice') {
+      await holdSpace(h);
+      continue;
+    }
+
+    if (state.scene === 'supergame-spin') {
+      tap(h, ' ');
       continue;
     }
 

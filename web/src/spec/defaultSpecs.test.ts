@@ -58,7 +58,7 @@ describe('default reverse-engineering specs', () => {
   });
 
   it('keep flow/editor constraints aligned with the DOS assets', () => {
-    expect(defaultFlowSpec.totalRounds).toBe(8);
+    expect(defaultFlowSpec.totalRounds).toBe(7);
     expect(defaultFlowSpec.phases).toEqual(['loading', 'await_spin', 'await_letter', 'round_over', 'game_over']);
     expect(defaultFlowSpec.questionEditor.sessionOnly).toBe(true);
     expect(defaultFlowSpec.questionEditor.maxTextBytes).toBe(20);
@@ -122,8 +122,8 @@ describe('default reverse-engineering specs', () => {
     });
   });
 
-  it('carries the 8 oracle stages and the DOS sound default', () => {
-    expect(defaultFlowSpec.stages.count).toBe(8);
+  it('carries the 7 oracle stages and the DOS sound default', () => {
+    expect(defaultFlowSpec.stages.count).toBe(7);
     expect(defaultFlowSpec.stages.names).toEqual([
       '1/64 ФИНАЛА',
       '1/32 ФИНАЛА',
@@ -132,7 +132,6 @@ describe('default reverse-engineering specs', () => {
       '1/4 ФИНАЛА',
       'ПОЛУФИНАЛ',
       'ФИНАЛ',
-      'СУПЕРФИНАЛ',
     ]);
     expect(defaultFlowSpec.stages.names).toHaveLength(defaultFlowSpec.stages.count);
     expect(defaultRenderSpec.soundDefaultEnabled).toBe(false);

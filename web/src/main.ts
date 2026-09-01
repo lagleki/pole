@@ -32,6 +32,7 @@ import { mountSvgBoxes } from './game/svgBoxes';
 import { mountSvgPlayers } from './game/svgPlayers';
 import { mountSvgStudio, mountStageBackdrop } from './game/svgStudio';
 import { mountSvgWheel } from './game/svgWheel';
+import { mountSupergameHud } from './game/svgSupergameHud';
 import { createHostTts } from './engine/tts';
 
 const MAX_EDIT_ROWS = defaultFlowSpec.questionEditor.maxVisibleRows;
@@ -115,6 +116,7 @@ app.innerHTML = `
           <div id="boxes-overlay" class="boxes-overlay" hidden></div>
           <div id="adware-overlay" class="adware-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>
+          <div id="supergame-overlay" class="supergame-overlay" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button" hidden>
             Коснитесь экрана, чтобы включить звук
           </button>
@@ -221,6 +223,7 @@ const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
 const assistOverlay = requireElement<HTMLDivElement>('#assist-overlay');
 const wallsOverlay = requireElement<HTMLDivElement>('#walls-overlay');
 const handOverlay = requireElement<HTMLDivElement>('#hand-overlay');
+const supergameOverlay = requireElement<HTMLDivElement>('#supergame-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
 const tabAdminBtn = requireElement<HTMLButtonElement>('#tab-admin');
@@ -257,6 +260,7 @@ const svgAdware = mountSvgAdware(adwareOverlay);
 const svgBoxes = mountSvgBoxes(boxesOverlay);
 const svgAssist = mountSvgAssist(assistOverlay);
 const svgHand = mountSvgHand(handOverlay);
+const svgSupergameHud = mountSupergameHud(supergameOverlay);
 
 // ------------------------------------------------------------ session state
 
@@ -527,6 +531,7 @@ async function gameLoop(): Promise<void> {
         hud: svgHud,
         players: svgPlayers,
         hand: svgHand,
+        supergameHud: svgSupergameHud,
         present: presenter,
         persist: persistEnabled
           ? { save: saveProgress, clear: clearProgress }
@@ -557,6 +562,9 @@ async function gameLoop(): Promise<void> {
       svgBoxes.setVisible(false);
       svgAdware.setVisible(false);
       svgHand.setVisible(false);
+      svgSupergameHud.hidePrizes();
+      svgSupergameHud.hideTimer();
+      svgSupergameHud.setVisible(false);
       currentRun = null;
     }
     summarizeState();

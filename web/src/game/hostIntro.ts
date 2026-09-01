@@ -30,11 +30,8 @@ export function firstTourInvite(): string {
   return 'И как обычно, под аплодисменты зрительного зала, я рад представить вам тройку игроков!';
 }
 
-/** Later tours: shorter re-open, then a new triple (or the superfinal). */
+/** Later tours: shorter re-open, then a new triple. */
 export function laterTourGreeting(stage: number): string {
-  if (stage >= 7) {
-    return 'Суперфинал! В эфире капитал-шоу Поле чудес!';
-  }
   if (stage === 6) {
     return 'Финал! В эфире капитал-шоу Поле чудес!';
   }
@@ -42,11 +39,17 @@ export function laterTourGreeting(stage: number): string {
 }
 
 export function laterTourInvite(stage: number): string {
-  if (stage >= 7) {
-    return 'Приглашаю в студию участников суперфинала!';
-  }
   if (stage === 6) {
     return 'Приглашаю в студию финальную тройку игроков!';
   }
   return 'Приглашаю в студию новую тройку игроков!';
+}
+
+/** Supergame intro after the final round (DIFF #31). */
+export function supergameGreeting(): string {
+  return 'Победитель финала! Сыграем в суперигру?';
+}
+
+export function supergamePrizeIntro(): string {
+  return 'Вот что вы заработали в нашей программе!';
 }

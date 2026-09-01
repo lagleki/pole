@@ -29,7 +29,7 @@ export interface GameProgressSave {
    * word-solved: resume after the player correctly named the word (round-end pending).
    * between-rounds: resume at next stage setup (saved before round-start music).
    */
-  checkpoint: 'in-round' | 'after-spin' | 'letter-pick' | 'letter-open' | 'word-solved' | 'between-rounds';
+  checkpoint: 'in-round' | 'after-spin' | 'letter-pick' | 'letter-open' | 'word-solved' | 'between-rounds' | 'supergame';
   rngState: number;
   humanSeats: 1 | 2;
   charId: number;
@@ -72,7 +72,8 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
     v.version !== PROGRESS_VERSION ||
     (v.checkpoint !== 'in-round' && v.checkpoint !== 'after-spin' &&
      v.checkpoint !== 'letter-pick' && v.checkpoint !== 'letter-open' &&
-     v.checkpoint !== 'word-solved' && v.checkpoint !== 'between-rounds') ||
+     v.checkpoint !== 'word-solved' && v.checkpoint !== 'between-rounds' &&
+     v.checkpoint !== 'supergame') ||
     typeof v.rngState !== 'number' ||
     (v.humanSeats !== 1 && v.humanSeats !== 2) ||
     !Array.isArray(v.seats) ||

@@ -6,6 +6,8 @@ import {
   firstTourInvite,
   laterTourGreeting,
   laterTourInvite,
+  supergameGreeting,
+  supergamePrizeIntro,
 } from './hostIntro';
 
 describe('broadcastWeekday', () => {
@@ -30,12 +32,15 @@ describe('studio intro lines', () => {
     );
   });
 
-  it('re-opens later tours and the superfinal', () => {
+  it('re-opens later tours and names the final', () => {
     expect(laterTourGreeting(1)).toBe('И вновь в эфире капитал-шоу Поле чудес!');
     expect(laterTourInvite(1)).toBe('Приглашаю в студию новую тройку игроков!');
     expect(laterTourGreeting(6)).toBe('Финал! В эфире капитал-шоу Поле чудес!');
     expect(laterTourInvite(6)).toBe('Приглашаю в студию финальную тройку игроков!');
-    expect(laterTourGreeting(7)).toBe('Суперфинал! В эфире капитал-шоу Поле чудес!');
-    expect(laterTourInvite(7)).toBe('Приглашаю в студию участников суперфинала!');
+  });
+
+  it('introduces the supergame after the final', () => {
+    expect(supergameGreeting()).toBe('Победитель финала! Сыграем в суперигру?');
+    expect(supergamePrizeIntro()).toBe('Вот что вы заработали в нашей программе!');
   });
 });

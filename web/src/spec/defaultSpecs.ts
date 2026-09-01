@@ -375,7 +375,7 @@ export const defaultFlowSpec = {
     'main-game-flow',
     'npc-audio-and-timing',
   ],
-  totalRounds: 8,
+  totalRounds: 7,
   phases: turnPhases,
   russianAlphabet: 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'.split(''),
   npc: {
@@ -420,7 +420,7 @@ export const defaultFlowSpec = {
   },
   // MainThread StageNames (dpr:803); totalRounds above stays for the old sandbox.
   stages: {
-    count: 8,
+    count: 7,
     names: [
       '1/64 ФИНАЛА',
       '1/32 ФИНАЛА',
@@ -429,7 +429,6 @@ export const defaultFlowSpec = {
       '1/4 ФИНАЛА',
       'ПОЛУФИНАЛ',
       'ФИНАЛ',
-      'СУПЕРФИНАЛ',
     ],
   },
   host: {
@@ -501,7 +500,7 @@ export const defaultParityCases = [
     tsStatus: 'implemented',
     resolutionStatus: 'confirmed',
     summary:
-      'web/src/game/script.ts ports the complete MainThread: splash, player presentation with name entry, 8 tournament stages, hand-cursor letter/decision input, box minigame, prize bargaining, adware interstitial, endgame ceremony, and session-scoped top-8 semantics. Verified by headless full-game integration tests and the Playwright smoke flow.',
+      'web/src/game/script.ts ports the complete MainThread: splash, player presentation with name entry, 7 tournament stages plus supergame, hand-cursor letter/decision input, box minigame, prize bargaining, adware interstitial, endgame ceremony, and session-scoped top-8 semantics. Verified by headless full-game integration tests and the Playwright smoke flow.',
     sourceRefs: ['web/src/game/script.ts', 'web/src/game/script.test.ts', 'Pole2/PoleWin32.dpr:869-1646'],
     nextAction: 'Validate scene timing and layout against reproducible DOS captures when the capture lane exists.',
   },

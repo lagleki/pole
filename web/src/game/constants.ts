@@ -140,7 +140,7 @@ export const PRIZES: readonly string[] = [
   'Пивную открывашку',
 ];
 
-/** MainThread StageNames — the 8 tournament stages (dpr:803). */
+/** MainThread StageNames — the 7 tournament stages (dpr:803); supergame follows (DIFF #31). */
 export const STAGE_NAMES: readonly string[] = [
   '1/64 ФИНАЛА',
   '1/32 ФИНАЛА',
@@ -149,8 +149,13 @@ export const STAGE_NAMES: readonly string[] = [
   '1/4 ФИНАЛА',
   'ПОЛУФИНАЛ',
   'ФИНАЛ',
-  'СУПЕРФИНАЛ',
 ];
+
+/** Banner shown during the post-finals supergame (DIFF #31). */
+export const SUPERGAME_BANNER = 'СУПЕРИГРА';
+
+/** Tournament rounds before the supergame. */
+export const TOURNAMENT_ROUNDS = 7;
 
 /** MainThread SectorValues, indexed by i = CurSector shr 1 (dpr:804). */
 export const SECTOR_VALUES: readonly number[] = [0, 5, 0, 20, 0, 10, 0, 15, 25, 10, 0, 5, 0, 20, 0, 15];
