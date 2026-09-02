@@ -151,7 +151,7 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
     }
 
     if (entry) {
-      if (state.scene === 'word-solve' || state.scene === 'supergame-solve') {
+      if (state.scene === 'word-solve' || state.scene === 'supergame-solve' || state.scene === 'supergame-think') {
         const word = state.word;
         const typed = policy.solveMode === 'solve-wrong' ? (word[0] === 'А' ? 'Б' : 'А') + word.slice(1) : word;
         for (const ch of typed) {

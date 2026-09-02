@@ -45,9 +45,9 @@ export function laterTourInvite(stage: number): string {
   return 'Приглашаю в студию новую тройку игроков!';
 }
 
-/** Supergame intro after the final round (DIFF #31). */
+/** Super-game intro after the final round (DIFF #31). */
 export function supergameGreeting(): string {
-  return 'Победитель финала! Сыграем в суперигру?';
+  return 'Победитель финала! Сыграем в супер-игру?';
 }
 
 export function supergamePrizeIntro(): string {

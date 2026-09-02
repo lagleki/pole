@@ -88,7 +88,7 @@ describe('game constants (oracle data tables)', () => {
     expect(PRIZES[9]).toBe('Пивную открывашку');
     expect(STAGE_NAMES[0]).toBe('1/64 ФИНАЛА');
     expect(STAGE_NAMES[6]).toBe('ФИНАЛ');
-    expect(SUPERGAME_BANNER).toBe('СУПЕРИГРА');
+    expect(SUPERGAME_BANNER).toBe('СУПЕР-ИГРА');
     expect(TOURNAMENT_ROUNDS).toBe(7);
   });
 

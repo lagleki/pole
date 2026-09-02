@@ -271,6 +271,7 @@ const sessionTopPlayers: TopPlayerRecord[] = [];
 const params = new URLSearchParams(window.location.search);
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const speedFactor = Math.max(0.1, Number.parseFloat(params.get('fast') ?? '1') || 1);
+const skipToSupergame = params.has('supergame');
 const testAudio = params.has('testAudio');
 
 let assetsReady = false;
@@ -280,7 +281,7 @@ let fontPlanes: PoleFonts | null = null;
 // One audio output for the whole session (its AudioContext unlocks on first gesture).
 const audioOutput = new WebAudioOutput();
 let soundEnabled: boolean = true;
-const persistEnabled = Number.isNaN(seedParam) && speedFactor === 1;
+const persistEnabled = Number.isNaN(seedParam) && speedFactor === 1 && !skipToSupergame;
 const bootPrefs = persistEnabled ? loadPrefs() : {};
 if (typeof bootPrefs.soundEnabled === 'boolean') {
   soundEnabled = bootPrefs.soundEnabled;
@@ -519,7 +520,7 @@ async function gameLoop(): Promise<void> {
         questions: sessionQuestions,
         topPlayers: sessionTopPlayers,
         state,
-        options: { humanSeats },
+        options: { humanSeats, skipToSupergame },
         wheel: svgWheel,
         studio: svgStudio,
         board: svgBoard,

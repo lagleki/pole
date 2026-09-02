@@ -39,8 +39,8 @@ describe('studio intro lines', () => {
     expect(laterTourInvite(6)).toBe('Приглашаю в студию финальную тройку игроков!');
   });
 
-  it('introduces the supergame after the final', () => {
-    expect(supergameGreeting()).toBe('Победитель финала! Сыграем в суперигру?');
+  it('introduces the super-game after the final', () => {
+    expect(supergameGreeting()).toBe('Победитель финала! Сыграем в супер-игру?');
     expect(supergamePrizeIntro()).toBe('Вот что вы заработали в нашей программе!');
   });
 });

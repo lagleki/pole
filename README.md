@@ -18,7 +18,8 @@ pnpm run dev        # open the printed URL
 ```
 
 URL parameters: `?seed=42` reproduces a whole game deterministically,
-`?fast=10` scales every delay (useful for testing).
+`?fast=10` scales every delay (useful for testing),
+`?supergame=1` skips the tournament and jumps straight to the super-game.
 
 Controls (as in DOS): **Space / click** — confirm and skip pauses,
 **←/→** — move the hand, **Enter** — accept name/word entry,

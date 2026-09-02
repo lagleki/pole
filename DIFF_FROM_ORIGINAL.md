@@ -187,10 +187,12 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
 29. **Шкатулка pays 1000.** Guessing the box with money adds 1000, not the DOS 100.
 30. **Box game for all seats.** Шкатулки minigame is offered to every seat,
     not only the human (DOS deviation #5).
-31. **Supergame instead of an 8th tour.** After the 7th tournament stage (ФИНАЛ)
-    the winner alone plays a TV-style supergame (DIFF #31): a procedural funny
-    prize basket (~10 000 ₽), choice «забираю призы» / «суперигра», a 7-sector
-    super-prize drum, one word with ⌈N/2⌉ free letters, a 60-second think timer
-    (`superGame` + `super60s`), then a final solve. Losing forfeits the basket;
-    winning keeps it plus the drum prize. The DOS game had no supergame — only
-    eight identical three-player tours ending in «СУПЕРФИНАЛ».
+31. **Super-game instead of an 8th tour.** After the 7th tournament stage (ФИНАЛ)
+    the winner alone plays a TV-style super-game (DIFF #31): a procedural funny
+    prize basket (~10 000 ₽), choice «забираю призы» / «супер-игра», a 7-sector
+    super-prize drum, one word with ⌈N/2⌉ free letters (no score/money updates),
+    a 60-second think timer with word entry open (`super-60s.mp3` only then),
+    then 15 more seconds to submit. Losing forfeits the basket; winning keeps
+    it plus the drum prize. URL `?supergame=1` jumps straight to the super-game
+    for local QA. The DOS game had no super-game — only eight identical
+    three-player tours ending in «СУПЕРФИНАЛ».

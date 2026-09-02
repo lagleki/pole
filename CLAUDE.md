@@ -20,7 +20,7 @@ public-domain disassembly-based reconstruction. Accepted deviations:
 
 ## Commands (run from `web/`)
 
-- `pnpm run dev` — play (URL params: `?seed=42` deterministic run, `?fast=10` speed)
+- `pnpm run dev` — play (URL params: `?seed=42` deterministic run, `?fast=10` speed, `?supergame=1` skip to super-game)
 - `pnpm run test` / `pnpm run build` / `pnpm run smoke` / `pnpm run verify`
 - Required after any gameplay/rendering/input/audio change: test + build + smoke.
 

@@ -169,6 +169,11 @@ export interface GameOptions {
    * seat to an NPC (dpr:1055-1078 + Delphi deviation #2).
    */
   humanSeats: 1 | 2;
+  /**
+   * DIFF #31: skip the 7 tournament stages and jump straight to the
+   * super-game with a seeded human winner (URL `?supergame=1`).
+   */
+  skipToSupergame?: boolean;
 }
 
 export interface GameContext {
@@ -525,8 +530,9 @@ class Game {
         present: this.supergameActive
           ? i === this.supergamePlayer && seat.spriteId !== null
           : seat.nameBytes.length > 0 || blink?.seat === i || this.hudIntroSeat === i,
-        score:
-          this.moneyShowScore?.seat === i
+        score: this.supergameActive
+          ? null
+          : this.moneyShowScore?.seat === i
             ? this.moneyShowScore.score
             : seat.spriteId !== null || this.hudIntroSeat === i
               ? seat.score
@@ -799,6 +805,12 @@ class Game {
   private paintScore(seatIdx: number): void {
     this.moneyJitter = null;
     this.moneyShowScore = null;
+    if (this.supergameActive) {
+      if (this.ctx.hud) {
+        this.syncHud(true);
+      }
+      return;
+    }
     if (this.ctx.hud) {
       this.syncHud(true);
       return;
@@ -2097,14 +2109,16 @@ class Game {
     await this.m.audio.playWav(this.audioBuf.subarray(0, k2), { audible: true });
 
     const scoreBefore = seat.score;
-    if (award.kind === 'perHit') {
-      seat.score += award.unit * hits;
-    } else if (award.kind === 'double') {
-      seat.score *= 2;
-    }
-    // Плюс / keep: score unchanged — do not restack the coin pile.
-    if (award.kind !== 'keep') {
-      await this.updateMoney(this.curPlayer, scoreBefore);
+    if (!this.supergameActive) {
+      if (award.kind === 'perHit') {
+        seat.score += award.unit * hits;
+      } else if (award.kind === 'double') {
+        seat.score *= 2;
+      }
+      // Плюс / keep: score unchanged — do not restack the coin pile.
+      if (award.kind !== 'keep') {
+        await this.updateMoney(this.curPlayer, scoreBefore);
+      }
     }
     this.syncDebug();
     return true;
@@ -2406,7 +2420,6 @@ class Game {
     this.syncPlayers(true);
     this.syncHud(true);
     this.playSfx('superGame');
-    this.playSfx('super60s');
     await this.yakubovichTalk(supergameGreeting());
     await this.yakubovichTalk(supergamePrizeIntro());
 
@@ -2421,14 +2434,13 @@ class Game {
 
     this.setScene('supergame-choice');
     const playSuper = this.isHuman(this.winner)
-      ? (await this.playerDecision('Забираю  Супер', 'ПРИЗЫ   ИГРА', 'Забираю призы!', 'Суперигра!')) > 0
+      ? (await this.playerDecision('Забираю  Супер', 'ПРИЗЫ   ИГРА', 'Забираю призы!', 'Супер-игра!')) > 0
       : true;
     if (!playSuper) {
       this.supergameWon = null;
       this.supergameAtRisk = false;
       this.supergameActive = false;
       this.stageBanner = null;
-      this.stopSfx('super60s');
       return;
     }
 
@@ -2440,7 +2452,7 @@ class Game {
     this.ctx.wheel?.setFrame(0);
 
     this.setScene('supergame-spin');
-    await this.yakubovichTalk('Вращайте барабан суперигры!');
+    await this.yakubovichTalk('Вращайте барабан супер-игры!');
     if (this.isHuman(this.winner)) {
       await this.waitKey(INFINITE);
     }
@@ -2458,30 +2470,17 @@ class Game {
       await this.openLetter(letterIdx, 0, { kind: 'keep' });
     }
 
-    this.setScene('supergame-think');
-    this.stopSfx('super60s');
-    this.playSfx('superGame', { restart: true });
-    this.playSfx('super60s', { loop: true, restart: true });
-    this.ctx.supergameHud?.showTimer(60);
-    for (let sec = 60; sec > 0; sec -= 1) {
-      this.ctx.supergameHud?.setTimer(sec);
-      await this.delay(1000);
-    }
-    this.stopSfx('super60s');
-    this.ctx.supergameHud?.hideTimer();
-    await this.yakubovichTalk('Время вышло! Назовите слово!');
-
-    this.setScene('supergame-solve');
-    const solved = await this.tellWordSupergame();
+    const solved = await this.thinkAndSolveSupergame();
     if (solved) {
       this.supergameWon = true;
       this.playSfx('fanfare');
-      await this.yakubovichTalk('Поздравляю! Вы выиграли суперигру!');
+      await this.yakubovichTalk('Вы выиграли супер-игру!');
       await this.yakubovichTalk(`Ваш суперприз — ${this.superPrize}!`);
     } else {
       this.supergameWon = false;
       this.supergameBasket = [];
-      await this.yakubovichTalk('Увы! Призы на кон сгорают!');
+      await this.yakubovichTalk('Вы проиграли супер-игру!');
+      await this.yakubovichTalk('Призы на кон сгорают!');
     }
 
     this.wheelSuperMode = false;
@@ -2539,53 +2538,56 @@ class Game {
     }
 
     await this.yakubovichSetSilent();
-    await this.yakubovichTalk('И вот задание на суперигру.');
+    await this.yakubovichTalk('И вот задание на супер-игру.');
     await this.yakubovichSetSilent();
     await this.yakubovichTalk(question.theme);
     await this.yakubovichSetSilent();
     this.syncDebug();
   }
 
-  /** Supergame word attempt — wrong answer does not remove the player (DIFF #31). */
-  private async tellWordSupergame(): Promise<boolean> {
-    this.setScene('supergame-solve');
-    const s = this.screen;
-    const { input } = this.m;
-
-    if (!this.isHuman(this.curPlayer)) {
-      const trySolve = this.remaindLetters <= Math.max(1, Math.ceil(this.guessedWord.length / 3));
-      if (trySolve && this.random(4) > 0) {
-        for (let i = 0; i < this.guessedWord.length; i += 1) {
-          this.opened[i] = true;
-        }
-        this.remaindLetters = 0;
-        this.syncBoard(true);
-        this.paintWordBoard();
-        this.playSfx('wordCorrect');
-        await this.yakubovichReply(decodeCp866(this.guessedWord), 'Ну конечно!');
-        await this.waitKey(2500);
-        await this.yakubovichSetSilent();
+  /** Countdown HUD while waiting for Enter; returns true if Enter won. */
+  private async waitEnterCountdown(seconds: number): Promise<boolean> {
+    for (let sec = seconds; sec > 0; sec -= 1) {
+      this.ctx.supergameHud?.setTimer(sec);
+      if (await this.m.input.waitEnter(1000)) {
         return true;
       }
-      this.playSfx('wordWrongSuper');
-      await this.yakubovichReply('Неправильно!');
-      await this.yakubovichSetSilent();
-      return false;
+    }
+    return false;
+  }
+
+  /**
+   * Super-game think minute (super-60s) with word entry open, then 15 s grace.
+   * DIFF #31.
+   */
+  private async thinkAndSolveSupergame(): Promise<boolean> {
+    this.setScene('supergame-think');
+    this.playSfx('super60s', { loop: true, restart: true });
+
+    if (!this.isHuman(this.curPlayer)) {
+      this.ctx.supergameHud?.showTimer(60);
+      for (let sec = 60; sec > 0; sec -= 1) {
+        this.ctx.supergameHud?.setTimer(sec);
+        await this.delay(1000);
+      }
+      this.stopSfx('super60s');
+      this.ctx.supergameHud?.hideTimer();
+      await this.yakubovichTalk('Время вышло! Назовите слово!');
+      return this.tellWordSupergameNpc();
     }
 
+    const s = this.screen;
+    const { input } = this.m;
     const maxLen = this.guessedWord.length;
     const entry = input.beginTextEntry(maxLen, this.wordPos + 13 * SCREEN_W + 4, 16);
     const k = maxLen << 4;
     const board = this.ctx.board;
+    let pollEntry: number | undefined;
     if (board) {
-      const pollEntry = window.setInterval(() => {
+      pollEntry = window.setInterval(() => {
         board.setWordBoard(this.wordPos, this.wordBoardCells(new Uint8Array(entry.bytes)));
       }, 50);
       board.setWordBoard(this.wordPos, this.wordBoardCells(new Uint8Array(entry.bytes)));
-      await input.waitEnter(INFINITE);
-      window.clearInterval(pollEntry);
-      input.endTextEntry();
-      board.setWordBoard(this.wordPos, this.wordBoardCells());
     } else {
       s.screenCopy(k, 31, BACKBUF + this.wordPos, this.wordPos);
       let j = entry.ofs - 2 * SCREEN_W - 4;
@@ -2593,34 +2595,167 @@ class Game {
         s.fillRect(j, 19, 14, 7);
         j += 16;
       }
-      await input.waitEnter(INFINITE);
-      input.endTextEntry();
     }
 
-    const typed = new Uint8Array(entry.bytes);
-    const match = typed.length === this.guessedWord.length
-      && typed.every((b, idx) => b === this.guessedWord[idx]);
-    if (match) {
-      for (let i = 0; i < this.guessedWord.length; i += 1) {
-        this.opened[i] = true;
-      }
-      this.remaindLetters = 0;
-      this.syncBoard(true);
-      this.paintWordBoard();
-      this.playSfx('wordCorrect');
-      await this.yakubovichReply(decodeCp866(this.guessedWord), 'Ну конечно!');
-      await this.waitKey(2500);
-      await this.yakubovichSetSilent();
-      return true;
+    this.ctx.supergameHud?.showTimer(60);
+    let submitted = await this.waitEnterCountdown(60);
+    this.stopSfx('super60s');
+
+    if (!submitted) {
+      await this.yakubovichTalk('Время вышло! Назовите слово!');
+      this.setScene('supergame-solve');
+      this.ctx.supergameHud?.showTimer(15);
+      submitted = await this.waitEnterCountdown(15);
+    } else {
+      this.setScene('supergame-solve');
     }
-    if (!this.ctx.board) {
+    this.ctx.supergameHud?.hideTimer();
+
+    if (pollEntry !== undefined) {
+      window.clearInterval(pollEntry);
+    }
+    input.endTextEntry();
+
+    const typed = new Uint8Array(entry.bytes);
+    if (board) {
+      board.setWordBoard(this.wordPos, this.wordBoardCells());
+    } else {
       s.screenCopy(k, 31, this.wordPos, BACKBUF + this.wordPos);
     }
     this.paintWordBoard();
-    this.playSfx('wordWrongSuper');
-    await this.yakubovichReply('Неправильно!');
+
+    const match = typed.length === this.guessedWord.length
+      && typed.every((b, idx) => b === this.guessedWord[idx]);
+    await this.concludeSupergameAnswer(match);
+    return match;
+  }
+
+  /**
+   * Assistant flips every still-closed board cell, then the host speaks the
+   * word (DIFF #31). Win/lose lines follow in the caller.
+   */
+  private async concludeSupergameAnswer(won: boolean): Promise<void> {
     await this.yakubovichSetSilent();
-    return false;
+    await this.assistantRevealRemainingLetters();
+    if (won) {
+      this.playSfx('wordCorrect');
+    } else {
+      this.playSfx('wordWrongSuper');
+    }
+    await this.yakubovichTalk(decodeCp866(this.guessedWord));
+    await this.yakubovichSetSilent();
+  }
+
+  /**
+   * Walk the assistant across the board and open every still-closed letter
+   * (same flip cadence as openLetter, without scoring).
+   */
+  private async assistantRevealRemainingLetters(): Promise<void> {
+    const s = this.screen;
+    const openBeforeWalk = new Set<number>();
+    for (let j = 0; j < this.guessedWord.length; j += 1) {
+      if (this.opened[j]) {
+        openBeforeWalk.add(j);
+      }
+    }
+    const assistStayWidth = 25;
+    const wordCellWidth = 16;
+    const assistStandShift = (assistStayWidth - wordCellWidth) >> 1;
+    const assistPos: number[] = new Array(20).fill(0);
+    assistPos[0] = 0x19 * SCREEN_W + 639;
+    let k = 0;
+    for (let j = this.guessedWord.length - 1; j >= 0; j -= 1) {
+      if (!this.opened[j]) {
+        k += 1;
+        assistPos[k] = this.wordPos + (j << 4) - assistStandShift;
+        this.opened[j] = true;
+      }
+    }
+    this.remaindLetters = 0;
+    this.syncDebug();
+    if (k === 0) {
+      this.syncBoard(true);
+      this.paintWordBoard();
+      return;
+    }
+
+    this.snapshotRoundToBackbuf();
+    await this.delay(600);
+
+    const stepDelta = [3, 10, 0, 12];
+    const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
+    let i3 = 0;
+    let walk = ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X0;
+    const revealed = new Set<number>();
+    const assist = this.ctx.assist;
+    const syncAssist = (ofs: number, spriteId: number): void => {
+      if (assist) {
+        assist.sync(true, ofs, spriteId);
+      }
+    };
+    try {
+      do {
+        let blitOfs = walk;
+        if (k > 0 && walk >= assistPos[k]) {
+          walk = assistPos[k];
+          blitOfs = walk;
+          if (!assist) {
+            s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+          }
+          syncAssist(blitOfs, SPRITE.ASSIST_STAY);
+          const cellIdx = this.letterIndexAtAssist(assistPos[k]);
+          const letterChar = decodeCp866(this.guessedWord.subarray(cellIdx, cellIdx + 1));
+          if (this.ctx.board) {
+            revealed.add(cellIdx);
+            this.syncBoard(true, revealed, openBeforeWalk);
+          } else {
+            const f = BACKBUF + assistPos[k] + assistStandShift + 11 * SCREEN_W;
+            s.fillRect(f, 19, 15, 7);
+            s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
+            s.screenCopy(15, 19, f - BACKBUF, f);
+          }
+          k -= 1;
+          if (!assist) {
+            s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+          }
+          syncAssist(blitOfs, SPRITE.ASSIST_STAY);
+          this.playSfx('letterCorrect');
+          await this.waitKey(1450);
+        } else {
+          const nextStep = stepDelta[(i3 + 1) & 3];
+          if (k > 0 && walk + nextStep >= assistPos[k]) {
+            walk = assistPos[k];
+            continue;
+          }
+          i3 = (i3 + 1) & 3;
+          walk += stepDelta[i3];
+          blitOfs = walk;
+          if (!assist) {
+            s.drawSprite(stepSprite[i3], walk, 2);
+          }
+          syncAssist(blitOfs, stepSprite[i3]);
+          await this.m.audio.sound(this.random(100) + 1000, 7, { audible: true });
+        }
+        await this.delay(50);
+        if (!assist) {
+          s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
+        }
+      } while (walk < ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X1);
+    } finally {
+      assist?.sync(false, 0, SPRITE.ASSIST_STAY);
+    }
+
+    this.syncBoard(true);
+    this.paintWordBoard();
+  }
+
+  /** NPC-only super-game word attempt (DIFF #31). */
+  private async tellWordSupergameNpc(): Promise<boolean> {
+    this.setScene('supergame-solve');
+    const trySolve = this.remaindLetters <= Math.max(1, Math.ceil(this.guessedWord.length / 3));
+    const won = trySolve && this.random(4) > 0;
+    await this.concludeSupergameAnswer(won);
+    return won;
   }
 
   /** dpr:1558-1646 */
@@ -2644,7 +2779,7 @@ class Game {
       const line1 = `Товарищ ${name}!`;
       s.print(line1, 0xbe * SCREEN_W + 0xf0 - (this.len(line1) << 2), 0, 14, 8);
       const line2 = this.supergameWon === true
-        ? `Вы выиграли СУПЕРИГРУ и суперприз — ${this.superPrize}!`
+        ? `Вы выиграли СУПЕР-ИГРУ и суперприз — ${this.superPrize}!`
         : this.supergameWon === false
           ? `Вы набрали ${seat.score} очков. Призы на кон сгорели.`
           : this.supergameBasket.length > 0
@@ -2674,7 +2809,7 @@ class Game {
       s.print('Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', 0x354a0, 0, 8, 8);
       await this.yakubovichTalk(
         this.supergameWon === true
-          ? 'Поздравляю! Вы выиграли суперигру!'
+          ? 'Вы выиграли супер-игру!'
           : 'Поздравляю! Вы выиграли финал!',
       );
       await this.waitKey(INFINITE);
@@ -2745,6 +2880,32 @@ class Game {
       this.curSector = 0;
       this.winner = 3;
       this.stage = 0;
+    }
+
+    if (this.ctx.options?.skipToSupergame && !resume) {
+      // DIFF #31: local QA shortcut — seed a human finalist and open super-game.
+      const seatIdx = this.humanSeats >= 1 ? 1 : 0;
+      this.winner = seatIdx;
+      this.curPlayer = seatIdx;
+      this.stage = TOURNAMENT_ROUNDS;
+      for (let i = 0; i <= 2; i += 1) {
+        if (i === seatIdx) {
+          this.seats[i] = {
+            spriteId: SPRITE.PLAYER,
+            nameBytes: encodeCp866('ИГРОК'),
+            score: 10_000,
+          };
+        } else {
+          this.seats[i] = { spriteId: null, nameBytes: new Uint8Array(0), score: 0 };
+        }
+      }
+      this.paintSeatSprite(seatIdx, SPRITE.PLAYER);
+      this.syncPlayers(true);
+      this.syncHud(true);
+      this.syncDebug();
+      await this.supergame();
+      await this.endgame();
+      return;
     }
 
     // Stage loop (dpr:989-1556).

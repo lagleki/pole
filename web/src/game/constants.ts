@@ -151,8 +151,8 @@ export const STAGE_NAMES: readonly string[] = [
   'ФИНАЛ',
 ];
 
-/** Banner shown during the post-finals supergame (DIFF #31). */
-export const SUPERGAME_BANNER = 'СУПЕРИГРА';
+/** Banner shown during the post-finals super-game (DIFF #31). */
+export const SUPERGAME_BANNER = 'СУПЕР-ИГРА';
 
 /** Tournament rounds before the supergame. */
 export const TOURNAMENT_ROUNDS = 7;
