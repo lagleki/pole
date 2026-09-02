@@ -209,7 +209,7 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
     }
 
     if (state.scene === 'supergame-spin') {
-      tap(h, ' ');
+      await holdSpace(h);
       continue;
     }
 

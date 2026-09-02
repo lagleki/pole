@@ -100,11 +100,15 @@ export function buildSuperWheelSvg(): string {
     const { fill, ink } = wedgeFill(i);
     const label = superPrizeLabel(prize);
     const fontSize = superPrizeLabelFontSize(label);
+    // Mid-radius on the wedge bisector; rotate −90° so the baseline runs
+    // along the sector (hub → rim), not across it.
+    const midR = R * 0.58;
     return `<g transform="rotate(${i * SUPER_WHEEL_STEP_DEG})">
         <path d="${wedge}" fill="${fill}"/>
-        <text x="0" y="${(-LABEL_R).toFixed(1)}" fill="${ink}" font-size="${fontSize}"
+        <text fill="${ink}" font-size="${fontSize}"
           font-family="PT Mono, ui-monospace, monospace" font-weight="700"
-          text-anchor="middle" dominant-baseline="middle">${label}</text>
+          text-anchor="middle" dominant-baseline="middle"
+          transform="translate(0 ${(-midR).toFixed(1)}) rotate(-90)">${label}</text>
       </g>`;
   }).join('');
 

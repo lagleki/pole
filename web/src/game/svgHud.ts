@@ -51,6 +51,8 @@ export interface HudView {
   setNameEntry(entry: HudNameEntry | null): void;
   showTalk(box: SpriteBox, text: string, side: 'west' | 'east'): void;
   showChoice(box: SpriteBox, left: string, right: string): void;
+  /** Single yellow choice bubble on the player's right (DIFF #31). */
+  showSingleChoice(box: SpriteBox, text: string): void;
   hideBubbles(): void;
 }
 
@@ -177,6 +179,14 @@ export function choiceBubbleLayout(
     left: { ...leftSize, h, x: leftX, y },
     right: { ...rightSize, h, x: rightX, y },
   };
+}
+
+/** Right-hand choice cloud only — used for a single confirm action. */
+export function singleChoiceBubbleLayout(box: SpriteBox, text: string): BubbleBox {
+  const size = bubbleForText(text);
+  const y = aboveHeadY(box, size.h);
+  const cx = box.x + box.w / 2;
+  return { ...size, x: clampX(cx + BUBBLE_GAP / 2, size.w), y };
 }
 
 export function talkBubbleLayout(box: SpriteBox, text: string, side: 'west' | 'east'): BubbleBox {
@@ -449,6 +459,10 @@ export function mountSvgHud(plateHost: HTMLElement, bubbleHost: HTMLElement): Hu
       const laid = choiceBubbleLayout(box, left, right);
       bubbles.innerHTML =
         bubbleMarkup(laid.left, 'south-east') + bubbleMarkup(laid.right, 'south-west');
+    },
+    showSingleChoice(box, text): void {
+      const laid = singleChoiceBubbleLayout(box, text);
+      bubbles.innerHTML = bubbleMarkup(laid, 'south-west');
     },
     hideBubbles(): void {
       bubbles.innerHTML = '';

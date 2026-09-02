@@ -1213,6 +1213,49 @@ class Game {
     return result;
   }
 
+  /**
+   * Single right-hand yellow choice (DIFF #31). Human confirms with Space;
+   * the seat leans right, then speaks the phrase.
+   */
+  private async playerConfirm(phrase: string): Promise<void> {
+    const s = this.screen;
+    const seatIdx = this.curPlayer;
+    const { spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
+    const bubbleW = 84;
+    const bubbleH = 39;
+    const bubbleOfs = (seatIdx === 1 ? talkBubbleOfs - 20 * SCREEN_W : talkBubbleOfs) + bubbleW + 4;
+    const hud = this.ctx.hud;
+    if (hud) {
+      hud.showSingleChoice(this.spriteBox(seatIdx, 99), phrase);
+    } else {
+      s.screenCopy(bubbleW, bubbleH, BACKBUF2, bubbleOfs);
+      s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, 2);
+      s.print(phrase, bubbleOfs + 8 * SCREEN_W + 44 - (this.len(phrase) << 2), 0, 14, 8);
+    }
+
+    if (this.useSvgPlayers()) {
+      this.ctx.players!.setSeat(seatIdx, DECISION_ANIM[4]);
+    } else {
+      s.fillRect(spriteOfs, 83, 99, 7);
+      s.drawSprite(DECISION_ANIM[4], spriteOfs, 2);
+    }
+
+    if (this.isHuman(seatIdx)) {
+      await this.waitKey(INFINITE);
+    } else {
+      await this.delay(900);
+    }
+
+    if (hud) {
+      hud.hideBubbles();
+    } else {
+      s.screenCopy(bubbleW, bubbleH, bubbleOfs, BACKBUF2);
+    }
+    this.paintSeatSprite(seatIdx);
+    await this.yakubovichSetSilent();
+    await this.playerSay(phrase);
+  }
+
   // ----------------------------------------------------------------- scenes
 
   /** dpr:869-947. WEB: click/Space aborts the intro and jumps to the studio. */
@@ -2453,9 +2496,7 @@ class Game {
 
     this.setScene('supergame-spin');
     await this.yakubovichTalk('Вращайте барабан супер-игры!');
-    if (this.isHuman(this.winner)) {
-      await this.waitKey(INFINITE);
-    }
+    await this.playerConfirm('Кручу барабан!');
     await this.spinWheel();
     this.superPrize = superWheelPrizes()[this.superSector] ?? '';
     await this.yakubovichTalk(`Суперприз — ${this.superPrize}!`);

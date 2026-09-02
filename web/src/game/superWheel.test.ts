@@ -8,10 +8,11 @@ describe('superWheel', () => {
     expect(superWheelPrizes()).toHaveLength(SUPER_WHEEL_SECTOR_COUNT);
   });
 
-  it('renders seven wedges in the super wheel SVG', () => {
+  it('renders seven wedges with radial prize labels', () => {
     const svg = buildSuperWheelSvg();
     const wedgeCount = (svg.match(/transform="rotate\(/g) ?? []).length;
     expect(wedgeCount).toBeGreaterThanOrEqual(7);
+    expect(svg).toContain('rotate(-90)');
     for (const prize of superWheelPrizes()) {
       expect(svg).toContain(prize.slice(0, 6));
     }

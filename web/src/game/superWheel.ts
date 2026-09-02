@@ -10,24 +10,24 @@ export function superWheelPrizes(): readonly string[] {
   return SUPER_DRUM_PRIZES;
 }
 
-/** Short label for a wedge (fits on the drum). */
+/** Short label for a wedge (fits along the radial axis). */
 export function superPrizeLabel(prize: string): string {
-  if (prize.length <= 10) {
+  if (prize.length <= 12) {
     return prize;
   }
   const words = prize.split(' ');
-  if (words.length > 1 && words[0].length <= 10) {
+  if (words.length > 1 && words[0].length <= 12) {
     return words[0];
   }
-  return `${prize.slice(0, 9)}…`;
+  return `${prize.slice(0, 11)}…`;
 }
 
 export function superPrizeLabelFontSize(label: string): number {
-  if (label.length <= 6) {
-    return 11;
+  if (label.length <= 7) {
+    return 10;
   }
-  if (label.length <= 9) {
-    return 9;
+  if (label.length <= 10) {
+    return 8;
   }
   return 7;
 }
