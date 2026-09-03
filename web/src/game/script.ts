@@ -1854,18 +1854,7 @@ class Game {
     const match = typed.length === this.guessedWord.length
       && typed.every((b, idx) => b === this.guessedWord[idx]);
     if (match) {
-      for (let i = 0; i < this.guessedWord.length; i += 1) {
-        this.opened[i] = true;
-      }
-      this.remaindLetters = 0;
-      this.syncBoard(true);
-      this.paintWordBoard();
-      this.playSfx('wordCorrect');
-      // Two lines so spokenCasing title-cases the ALL-CAPS bank word (a single
-      // `"WORD. Ну конечно!"` string stays shouty and TTS spells letters).
-      await this.yakubovichReply(decodeCp866(this.guessedWord), 'Ну конечно!');
-      await this.waitKey(2500);
-      await this.yakubovichSetSilent();
+      await this.concludeCorrectWordGuess();
       return 'won';
     }
     if (!this.ctx.board) {
@@ -1876,6 +1865,21 @@ class Game {
     await this.yakubovichReply('Неправильно! Вы покидаете игру!');
     this.removePlayer();
     return 'removed';
+  }
+
+  /**
+   * Whole-word win: host says «<слово>, ну конечно!» immediately while the
+   * assistant walks out and flips every still-closed cell (DIFF #24 carve-out).
+   */
+  private async concludeCorrectWordGuess(): Promise<void> {
+    this.playSfx('wordCorrect');
+    await Promise.all([
+      // Two lines so spokenCasing title-cases the ALL-CAPS bank word (a single
+      // `"WORD. Ну конечно!"` string stays shouty and TTS spells letters).
+      this.yakubovichTalk(decodeCp866(this.guessedWord), 'Ну конечно!'),
+      this.assistantRevealRemainingLetters({ leadInMs: 0 }),
+    ]);
+    await this.yakubovichSetSilent();
   }
 
   /** dpr:1352-1358 */
@@ -2749,7 +2753,7 @@ class Game {
    * Walk the assistant across the board and open every still-closed letter
    * (same flip cadence as openLetter, without scoring).
    */
-  private async assistantRevealRemainingLetters(): Promise<void> {
+  private async assistantRevealRemainingLetters(opts?: { leadInMs?: number }): Promise<void> {
     const s = this.screen;
     const openBeforeWalk = new Set<number>();
     for (let j = 0; j < this.guessedWord.length; j += 1) {
@@ -2779,7 +2783,10 @@ class Game {
     }
 
     this.snapshotRoundToBackbuf();
-    await this.delay(600);
+    const leadInMs = opts?.leadInMs ?? 600;
+    if (leadInMs > 0) {
+      await this.delay(leadInMs);
+    }
 
     const stepDelta = [3, 10, 0, 12];
     const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];

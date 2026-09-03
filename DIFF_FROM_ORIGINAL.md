@@ -120,7 +120,9 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
 24. **Pause before the host replies to a player.** After a letter, a whole-word
     guess, a prize/box choice, Yakubovich waits ~700 ms (Space/click skips)
     before speaking so the player's answer can land. Other host lines are
-    unchanged.
+    unchanged. **Exception:** a *correct* whole-word guess skips that pause —
+    he says «&lt;слово&gt;, ну конечно!» at once while the assistant (in parallel)
+    walks out and flips every still-closed letter.
 25. **TV-show samples instead of PC-speaker PWM.** Beeps, drum ticks and
     letter/word stings play as mp3s from the «Поле чудес» clip pack
     (zvukipro.com; files in `web/public/assets/sfx/`).     PWM still runs for
