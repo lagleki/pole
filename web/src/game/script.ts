@@ -296,6 +296,16 @@ class Game {
   private resumeAtRoundWon = false;
   /** WEB: between-rounds reload — keep seat names/scores, skip re-presentation. */
   private resumingBetweenRounds = false;
+  /**
+   * WEB: winner seat data stashed while stageSetup/presentation clear the stage.
+   * Previous-round sprite + label must not linger; restored when that seat is revealed.
+   */
+  private winnerCarry: {
+    seat: number;
+    spriteId: number | null;
+    nameBytes: Uint8Array;
+    score: number;
+  } | null = null;
   /** WEB DIFF #31: post-finals supergame state. */
   private stageBanner: string | null = null;
   private supergameActive = false;
@@ -1430,13 +1440,35 @@ class Game {
     this.drawBoardChrome();
 
     if (!this.resumingBetweenRounds) {
+      this.winnerCarry = null;
+      if (this.winner >= 0 && this.winner <= 2) {
+        const w = this.seats[this.winner];
+        this.winnerCarry = {
+          seat: this.winner,
+          spriteId: w.spriteId,
+          nameBytes: new Uint8Array(w.nameBytes),
+          score: w.score,
+        };
+      }
+      // Clear every seat visually — winner art/labels from the last round must not linger.
       for (let i = 0; i <= 2; i += 1) {
+        const layout = liveSeat(i);
+        this.seats[i].nameBytes = new Uint8Array(0);
+        this.seats[i].spriteId = null;
         if (i !== this.winner) {
-          this.seats[i].nameBytes = new Uint8Array(0);
-          this.seats[i].spriteId = null;
           this.seats[i].score = 0;
         }
+        if (!this.useSvgPlayers()) {
+          this.paintSeatSprite(i, null);
+        }
+        if (!this.ctx.hud) {
+          s.fillRect(layout.labelOfs - 641, 30, 110, 0);
+          s.fillRect(layout.labelOfs, 28, 108, 7);
+          s.fillRect(layout.labelOfs + SCREEN_W * 14, 14, 80, 7);
+          s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
+        }
       }
+      this.hudIntroSeat = null;
       this.syncPlayers(true);
       this.syncHud(true);
     }
@@ -1456,10 +1488,8 @@ class Game {
       s.print(this.available, 334 * SCREEN_W + 4, 0, 14, 20);
     }
 
-    const saved = this.seats[0].spriteId;
-    this.seats[0].spriteId = null; // dpr:1034 — avoid drawing seat 0 before presentation
+    // dpr:1034 — seats stay empty until presentation reveals them one by one.
     this.drawFortuneWheel(this.curSector);
-    this.seats[0].spriteId = saved;
     this.stopSfx('opening');
     this.stopSfx('openingOld');
     // Music only after the between-rounds save and studio chrome are in place.
@@ -1504,7 +1534,34 @@ class Game {
     this.resumingBetweenRounds = false;
   }
 
-  /** dpr:1040-1087 */
+  /** Seat caption blink (dpr:1047-1054) — name plate label only, no player name yet. */
+  private async playCaptionIntro(seatIdx: number): Promise<void> {
+    const s = this.screen;
+    const layout = liveSeat(seatIdx);
+    const hud = this.ctx.hud;
+    const seat = this.seats[seatIdx];
+    const savedName = seat.nameBytes;
+    seat.nameBytes = new Uint8Array(0);
+    this.hudIntroSeat = seatIdx;
+    if (!hud) {
+      s.fillRect(layout.labelOfs - 641, 30, 110, 0);
+      s.fillRect(layout.labelOfs, 28, 108, 7);
+    }
+    for (let i = 3; i >= 0; i -= 1) {
+      if (hud) {
+        this.syncHud(true, { seat: seatIdx, on: (i & 1) === 1 });
+      } else {
+        s.print(layout.caption, layout.labelOfs + 14, (i & 1) * 7, 14, 8);
+      }
+      await this.m.audio.sound(i * 10 + 100, 20);
+      await this.delay(120);
+    }
+    await this.m.audio.sound(50, 100);
+    seat.nameBytes = savedName;
+    this.syncHud(true, { seat: seatIdx, on: false });
+  }
+
+  /** dpr:1040-1087 — sprite first, then caption blink, then name (web order). */
   private async presentation(): Promise<void> {
     if (this.resumingBetweenRounds) {
       await this.presentationFromSave();
@@ -1519,80 +1576,80 @@ class Game {
       const layout = liveSeat(j);
       const hud = this.ctx.hud;
       this.hudIntroSeat = j;
-      if (j !== this.winner) {
+
+      if (j === this.winner && this.winnerCarry?.seat === j) {
+        seat.spriteId = this.winnerCarry.spriteId;
+        seat.nameBytes = new Uint8Array(this.winnerCarry.nameBytes);
+        seat.score = this.winnerCarry.score;
+        this.winnerCarry = null;
+      } else if (j !== this.winner) {
         seat.nameBytes = new Uint8Array(0);
+        seat.spriteId = null;
         seat.score = 0;
       }
-      if (!hud) {
-        s.fillRect(layout.labelOfs - 641, 30, 110, 0);
-        s.fillRect(layout.labelOfs, 28, 108, 7);
-      }
-      for (let i = 3; i >= 0; i -= 1) {
-        if (hud) {
-          this.syncHud(true, { seat: j, on: (i & 1) === 1 });
-        } else {
-          s.print(layout.caption, layout.labelOfs + 14, (i & 1) * 7, 14, 8);
-        }
-        await this.m.audio.sound(i * 10 + 100, 20);
-        await this.delay(120);
-      }
-      await this.m.audio.sound(50, 100);
-      this.syncHud(true, { seat: j, on: false });
 
-      if (j !== this.winner) {
-        // Seat 0 is never prompted (dpr:1057); in 1-player web mode only
-        // seat 1 is, in the original mode seats 1 and 2 both are.
-        const prompted = j > 0 && j <= this.humanSeats;
-        if (prompted) {
-          await this.yakubovichSetSilent();
-          // Open the name field before the host line so typing (and the HTML
-          // entry bar) is available while he says «представьтесь», not after TTS.
-          seat.spriteId = SPRITE.PLAYER;
-          this.paintSeatSprite(j, SPRITE.PLAYER);
-          const nameOfs = hud ? BACKBUF + SCREEN_W * 14 : layout.labelOfs + SCREEN_W * 14;
-          const entry = input.beginTextEntry(10, nameOfs, 8);
-          const pollName = hud
-            ? window.setInterval(() => {
-                hud.setNameEntry({
-                  seat: j,
-                  text: decodeCp866(new Uint8Array(entry.bytes)),
-                  caret: Math.floor(Date.now() / 400) % 2 === 0,
-                });
-              }, 50)
-            : 0;
-          await Promise.all([
-            this.yakubovichTalk('Пожалуйста, представьтесь!'),
-            input.waitEnter(INFINITE),
-          ]);
-          if (hud) {
-            window.clearInterval(pollName);
-            hud.setNameEntry(null);
-          }
-          input.endTextEntry();
-          if (!hud) {
-            s.fillRect(layout.labelOfs + SCREEN_W * 14, 14, 80, 7);
-          }
-          seat.nameBytes = new Uint8Array(entry.bytes);
+      // Seat 0 is never prompted (dpr:1057); in 1-player web mode only
+      // seat 1 is, in the original mode seats 1 and 2 both are.
+      const prompted = j !== this.winner && j > 0 && j <= this.humanSeats;
+      let captionDone = false;
+
+      if (prompted) {
+        seat.spriteId = SPRITE.PLAYER;
+        this.paintSeatSprite(j, SPRITE.PLAYER);
+        await this.delay(280);
+        await this.playCaptionIntro(j);
+        captionDone = true;
+
+        await this.yakubovichSetSilent();
+        // Name field open while the host says «представьтесь».
+        const nameOfs = hud ? BACKBUF + SCREEN_W * 14 : layout.labelOfs + SCREEN_W * 14;
+        const entry = input.beginTextEntry(10, nameOfs, 8);
+        const pollName = hud
+          ? window.setInterval(() => {
+              hud.setNameEntry({
+                seat: j,
+                text: decodeCp866(new Uint8Array(entry.bytes)),
+                caret: Math.floor(Date.now() / 400) % 2 === 0,
+              });
+            }, 50)
+          : 0;
+        await Promise.all([
+          this.yakubovichTalk('Пожалуйста, представьтесь!'),
+          input.waitEnter(INFINITE),
+        ]);
+        if (hud) {
+          window.clearInterval(pollName);
+          hud.setNameEntry(null);
         }
-        if (seat.nameBytes.length === 0) {
-          if (prompted && this.humanSeats === 1) {
-            // WEB: 1-player mode guarantees a human seat — an empty name
-            // keeps the seat human under a default name instead of the
-            // original's NPC fallback.
-            seat.nameBytes = encodeCp866('ИГРОК');
-          } else {
-            // Empty name (or an unprompted seat): NPC takes it (dpr:1070-1077).
-            const character = this.characters[this.charId];
-            seat.spriteId = character.spriteId;
-            seat.nameBytes = encodeCp866(character.name);
-            this.charId = (this.charId + 1) % this.characters.length;
-          }
+        input.endTextEntry();
+        if (!hud) {
+          s.fillRect(layout.labelOfs + SCREEN_W * 14, 14, 80, 7);
+        }
+        seat.nameBytes = new Uint8Array(entry.bytes);
+      }
+
+      if (j !== this.winner && seat.nameBytes.length === 0) {
+        if (prompted && this.humanSeats === 1) {
+          // WEB: 1-player mode keeps a human seat under a default name.
+          seat.nameBytes = encodeCp866('ИГРОК');
+          seat.spriteId = SPRITE.PLAYER;
+        } else {
+          // Empty name (or an unprompted seat): NPC takes it (dpr:1070-1077).
+          const character = this.characters[this.charId];
+          seat.spriteId = character.spriteId;
+          seat.nameBytes = encodeCp866(character.name);
+          this.charId = (this.charId + 1) % this.characters.length;
         }
       }
 
       if (seat.spriteId !== null) {
         this.paintSeatSprite(j, seat.spriteId);
+        if (!captionDone) {
+          await this.delay(280);
+          await this.playCaptionIntro(j);
+        }
       }
+
       if (!this.ctx.hud) {
         s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
       }
@@ -1604,6 +1661,7 @@ class Game {
       await this.delay(500);
     }
     this.hudIntroSeat = null;
+    this.winnerCarry = null;
     this.winner = 3;
   }
 

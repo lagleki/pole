@@ -49,17 +49,6 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Faint studio scanlines over everything (pointer-transparent). */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
-  opacity: 0.35;
-  z-index: 3;
-}
-
 #app {
   position: relative;
   z-index: 1;
