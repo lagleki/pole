@@ -13,6 +13,9 @@ import {
   BRICK_STRIDE_X,
   BRICK_STRIDE_Y,
   BRICK_W,
+  FLOOR_BACK_LEFT_X,
+  FLOOR_BACK_RIGHT_X,
+  FLOOR_BACK_Y,
   LAMP_H,
   LAMP_POS,
   LAMP_W,
@@ -34,6 +37,9 @@ import {
   punchStudioHoles,
   restoredBrickKinds,
   rightWallPoly,
+  stageBackdropMarkup,
+  stageFloorClipPath,
+  stageFloorClipPercents,
   studioPunchRects,
   wallRect,
 } from './svgStudio';
@@ -57,14 +63,20 @@ describe('svg studio', () => {
     expect(BRICK_COLS).toBe(12);
   });
 
-  it('emits a light gray stage underlay with horizontal floor lines', () => {
-    const svg = buildStageBackdropSvg();
-    expect(svg).toContain('viewBox="0 0 640 350"');
-    expect(svg).toContain('id="stage-floor-lines"');
-    expect(svg).toContain('fill="#d8d8d8"');
-    expect(svg).toContain('stroke="#b8b8b8"');
-    expect(svg.match(/<line/g)?.length).toBeGreaterThan(30);
-    expect(svg).not.toContain('id="studio-bands"');
+  it('defines floor boundaries from wall inner bases and screen bottom corners', () => {
+    const clip = stageFloorClipPercents();
+    expect(clip.topLeft).toEqual({ x: (WALL_W / 640) * 100, y: (WALL_BOT / 350) * 100 });
+    expect(clip.topRight).toEqual({ x: ((640 - WALL_W) / 640) * 100, y: (WALL_BOT / 350) * 100 });
+    expect(clip.bottomLeft).toEqual({ x: 0, y: 100 });
+    expect(clip.bottomRight).toEqual({ x: 100, y: 100 });
+    expect(stageFloorClipPath()).toContain('polygon(');
+    expect(FLOOR_BACK_LEFT_X).toBe(WALL_W);
+    expect(FLOOR_BACK_RIGHT_X).toBe(640 - WALL_W);
+    expect(FLOOR_BACK_Y).toBe(WALL_BOT);
+    const markup = stageBackdropMarkup();
+    expect(markup).toContain('stage-floor-tiles');
+    expect(markup).toContain('stage-wall-band');
+    expect(buildStageBackdropSvg()).toBe(markup);
   });
 
   it('emits geometric bricks and lamps; side walls live in a front overlay', () => {
@@ -112,7 +124,7 @@ describe('svg studio', () => {
     expect(Math.max(...left.map((p) => p.y))).toBe(WALL_BOT);
   });
 
-  it('models soft lamp falloff and emits a diffuse light overlay', () => {
+  it('models soft lamp falloff and emits a wall-only light overlay', () => {
     const bulbs = lampBulbs();
     expect(bulbs).toHaveLength(2);
     expect(bulbs[0]).toEqual({ x: LAMP_POS[0].x + 8, y: LAMP_POS[0].y + 10.5 });
@@ -122,11 +134,11 @@ describe('svg studio', () => {
     expect(near).toBeGreaterThan(1);
     const light = buildStudioLightSvg();
     expect(light).toContain('id="studio-light-root"');
+    expect(light).toContain('id="studio-light-wall-clip"');
     expect(light).toContain('class="lamp-fill"');
-    expect(light).toContain('class="lamp-floor"');
-    expect(light).toContain('url(#lamp-bounce)');
     expect(light).toContain('url(#lamp-fill-0)');
-    expect(light).toContain('url(#lamp-floor-1)');
+    expect(light).not.toContain('class="lamp-floor"');
+    expect(light).not.toContain('url(#lamp-bounce)');
   });
 
   it('writes one <use> per brick kind', () => {

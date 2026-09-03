@@ -149,6 +149,21 @@ describe('GameInput events', () => {
     expect(input.pollKeyPressed()).toBe(false);
   });
 
+  it('actionHeld stays true until Space or pointer is released', () => {
+    const { input } = makeInput();
+    expect(input.actionHeld).toBe(false);
+    input.handleKey(' ');
+    expect(input.actionHeld).toBe(true);
+    expect(input.pollKeyPressed()).toBe(true);
+    expect(input.actionHeld).toBe(true);
+    input.handleKeyUp(' ');
+    expect(input.actionHeld).toBe(false);
+    input.pointerDown();
+    expect(input.actionHeld).toBe(true);
+    input.pointerUp();
+    expect(input.actionHeld).toBe(false);
+  });
+
   it('Enter sets and Enter keyup resets the Enter event', async () => {
     const { input, clock } = makeInput();
     input.handleKey('Enter');

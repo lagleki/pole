@@ -4,10 +4,13 @@ import {
   SPIN_CRUISE_MS,
   SPIN_DURATION_JITTER_MS,
   SPIN_DURATION_MS,
+  SPIN_HOLD_FULL_MS,
   SPIN_LAST_MS,
   spinEase,
   spinFrictionProgress,
+  spinMilliturns,
   spinStepDelayMs,
+  spinStepsFromMilliturns,
   TV_POINT_VALUES,
   WHEEL_SECTOR_COUNT,
   WHEEL_SECTORS,
@@ -95,7 +98,16 @@ describe('cruise-then-brake spin delays', () => {
     expect(vMid).toBeGreaterThan(vEnd);
   });
 
-  it('averages about nine seconds of spin', () => {
+  it('averages about nine seconds of spin at the mean turn count', () => {
     expect(SPIN_DURATION_MS + (SPIN_DURATION_JITTER_MS - 1) / 2).toBe(9000);
+  });
+
+  it('maps a tap to a random 1.1–2.5 turns and a full hold to 2.5', () => {
+    expect(spinMilliturns(0, 0)).toBe(1100);
+    expect(spinMilliturns(0, 1400)).toBe(2500);
+    expect(spinMilliturns(SPIN_HOLD_FULL_MS, 0)).toBe(2500);
+    expect(spinMilliturns(SPIN_HOLD_FULL_MS / 2, 0)).toBe(1800);
+    expect(spinStepsFromMilliturns(1100, 36)).toBe(40);
+    expect(spinStepsFromMilliturns(2500, 36)).toBe(90);
   });
 });

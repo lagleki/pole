@@ -30,7 +30,7 @@ import { mountSvgAdware } from './game/svgAdware';
 import { mountSvgYakubovich } from './game/svgYakubovich';
 import { mountSvgBoxes } from './game/svgBoxes';
 import { mountSvgPlayers } from './game/svgPlayers';
-import { mountSvgStudio, mountStageBackdrop } from './game/svgStudio';
+import { mountSvgStudio, mountStageBackdrop, restoredBrickKinds } from './game/svgStudio';
 import { mountSvgWheel } from './game/svgWheel';
 import { mountSupergameHud } from './game/svgSupergameHud';
 import { createHostTts } from './engine/tts';
@@ -444,6 +444,47 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+/** Decode sprite art into every SVG overlay (idempotent). */
+function loadSvgSpriteArt(): void {
+  if (!spriteLib) {
+    return;
+  }
+  const { sprites } = spriteLib;
+  const palette = defaultRenderSpec.palette;
+  svgAssist.loadSprites(sprites, palette);
+  svgPlayers.loadSprites(sprites, palette);
+  svgYak.loadSprites(sprites, palette);
+  svgAdware.loadSprites(sprites, palette);
+  svgBoxes.loadSprites(sprites, palette);
+}
+
+/** Paint the full studio stack behind the audio gate so the first tap reveals it instantly. */
+function prerenderStudioBehindGate(): void {
+  loadSvgSpriteArt();
+  svgStudio.setBricks(restoredBrickKinds());
+  svgStudio.setVisible(true);
+  svgBoard.setStage(0);
+  svgBoard.setVisible(true);
+  svgWheel.setFrame(0);
+  svgWheel.setVisible(true);
+  svgYak.showIdle();
+  const defaultAvail = new Uint8Array(32);
+  for (let i = 0; i < 32; i += 1) {
+    defaultAvail[i] = 0x80 + i;
+  }
+  svgAlphabet.setAvailable(defaultAvail);
+  svgAlphabet.setVisible(true);
+}
+
+/** Two rAF ticks so the browser composites SVG/CSS layers before the gate appears. */
+function warmCompositorLayers(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 async function gameLoop(): Promise<void> {
   for (;;) {
     while (sessionQuestions.length === 0) {
@@ -483,13 +524,7 @@ async function gameLoop(): Promise<void> {
     const machine: Machine = { screen, input, audio, clock, rng, signal };
     const state = createDebugState();
     currentRun = { controller, input, audio, state };
-    if (spriteLib) {
-      svgAssist.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
-      svgPlayers.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
-      svgYak.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
-      svgAdware.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
-      svgBoxes.loadSprites(spriteLib.sprites, defaultRenderSpec.palette);
-    }
+    loadSvgSpriteArt();
 
     const presenter = new CanvasPresenter(
       screen,
@@ -1012,6 +1047,8 @@ async function loadBundledAssets(): Promise<void> {
   summarizeState();
   renderQuestions();
   gameSfx.warmup();
+  prerenderStudioBehindGate();
+  await warmCompositorLayers();
 
   if (!assetsReady) {
     assetsReady = true;

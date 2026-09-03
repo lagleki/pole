@@ -158,6 +158,8 @@ export class GameInput implements InputApi {
   private readonly signal: AbortSignal;
   private readonly keyPressed: AutoResetEvent;
   private readonly enter: AutoResetEvent;
+  private spaceHeld = false;
+  private pointerHeld = false;
   private entry: MutableTextEntry | null = null;
 
   constructor(screen: ScreenApi, clock: ClockApi, signal: AbortSignal) {
@@ -177,6 +179,10 @@ export class GameInput implements InputApi {
 
   waitEnter(timeoutMs: number): Promise<boolean> {
     return this.enter.wait(timeoutMs, this.signal);
+  }
+
+  get actionHeld(): boolean {
+    return this.spaceHeld || this.pointerHeld;
   }
 
   get textEntry(): TextEntryState | null {
@@ -205,6 +211,7 @@ export class GameInput implements InputApi {
     }
     switch (key) {
       case ' ':
+        this.spaceHeld = true;
         this.keyPressed.set();
         return 'consumed';
       case 'Enter':
@@ -235,6 +242,7 @@ export class GameInput implements InputApi {
   /** WM_KEYUP: releasing the key un-latches the event (dpr:730-733). */
   handleKeyUp(key: string): void {
     if (key === ' ') {
+      this.spaceHeld = false;
       this.keyPressed.reset();
     } else if (key === 'Enter') {
       this.enter.reset();
@@ -243,11 +251,13 @@ export class GameInput implements InputApi {
 
   /** WM_LBUTTONDOWN (dpr:764). */
   pointerDown(): void {
+    this.pointerHeld = true;
     this.keyPressed.set();
   }
 
   /** WM_LBUTTONUP (dpr:765). */
   pointerUp(): void {
+    this.pointerHeld = false;
     this.keyPressed.reset();
   }
 

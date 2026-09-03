@@ -397,24 +397,54 @@ function wallDefsMarkup(): string {
       </linearGradient>`;
 }
 
-/** Permanent 640×350 underlay: light gray “floor” with horizontal board lines. */
+/** Inner hall-facing edge of each side wall (DOS WALL_LEFT / WALL_RIGHT). */
+export const FLOOR_BACK_LEFT_X = WALL_W;
+export const FLOOR_BACK_RIGHT_X = SCREEN_W - WALL_W;
+export const FLOOR_BACK_Y = WALL_BOT;
+
+/**
+ * Floor geometry in internal 640×350 space.
+ * Side walls meet the floor at (FLOOR_BACK_LEFT_X, FLOOR_BACK_Y) and (FLOOR_BACK_RIGHT_X, FLOOR_BACK_Y).
+ * The perspective floor tapers at this slope naturally without hard geometric clipping.
+ */
+export function stageFloorClipPercents(): {
+  topLeft: { x: number; y: number };
+  topRight: { x: number; y: number };
+  bottomLeft: { x: number; y: number };
+  bottomRight: { x: number; y: number };
+} {
+  const topY = (FLOOR_BACK_Y / VISIBLE_H) * 100;
+  const leftX = (FLOOR_BACK_LEFT_X / SCREEN_W) * 100;
+  const rightX = (FLOOR_BACK_RIGHT_X / SCREEN_W) * 100;
+  return {
+    topLeft: { x: leftX, y: topY },
+    topRight: { x: rightX, y: topY },
+    bottomLeft: { x: 0, y: 100 },
+    bottomRight: { x: 100, y: 100 },
+  };
+}
+
+export function stageFloorClipPath(): string {
+  const p = stageFloorClipPercents();
+  return `polygon(${p.topLeft.x}% ${p.topLeft.y}%, ${p.topRight.x}% ${p.topRight.y}%, ${p.bottomRight.x}% ${p.bottomRight.y}%, ${p.bottomLeft.x}% ${p.bottomLeft.y}%)`;
+}
+
+export function stageBackdropMarkup(): string {
+  return `<div class="stage-wall-band"></div>
+    <div class="stage-floor">
+      <div class="stage-floor-tiles" aria-hidden="true"></div>
+    </div>`;
+}
+
+/** @deprecated SVG backdrop replaced by CSS floor tiles; kept for tests. */
 export function buildStageBackdropSvg(): string {
-  const base = '#d8d8d8';
-  const line = '#b8b8b8';
-  const step = 8;
-  const lines: string[] = [];
-  for (let y = step; y < VISIBLE_H; y += step) {
-    lines.push(`<line x1="0" y1="${y}" x2="${SCREEN_W}" y2="${y}" stroke="${line}" stroke-width="1"/>`);
-  }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SCREEN_W} ${VISIBLE_H}"
-      width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      <rect width="${SCREEN_W}" height="${VISIBLE_H}" fill="${base}"/>
-      <g id="stage-floor-lines" stroke-linecap="square">${lines.join('')}</g>
-    </svg>`;
+  return stageBackdropMarkup();
 }
 
 export function mountStageBackdrop(host: HTMLElement): void {
-  host.innerHTML = buildStageBackdropSvg();
+  const floorColor = ega(defaultRenderSpec.stage.floorRect.fillColor);
+  host.style.setProperty('--stage-floor-base', floorColor);
+  host.innerHTML = stageBackdropMarkup();
 }
 
 export function buildStudioSvg(kinds: readonly number[] = restoredBrickKinds()): string {
@@ -454,58 +484,38 @@ export function buildWallsSvg(): string {
 }
 
 /**
- * Diffuse lamp spill over walls + floor (blend overlay).
- * Approximates soft tracing: radial fill from each bulb + flattened floor pools
- * (floor faces the lamps → wider ellipse), plus a bounce strip along the stage.
+ * Diffuse lamp spill on the back wall only (blend overlay).
+ * Floor lighting lives on the stage backdrop; keeping spill off the floor
+ * avoids banding that showed through transparent sprite pixels.
  */
 export function buildStudioLightSvg(): string {
   const bulbs = lampBulbs();
   const defs = bulbs
     .map((b, i) => {
       const id = `lamp-fill-${i}`;
-      const floorId = `lamp-floor-${i}`;
       return `<radialGradient id="${id}" gradientUnits="userSpaceOnUse"
           cx="${b.x}" cy="${b.y}" r="220">
           <stop offset="0%" stop-color="#fff8d0" stop-opacity="0.55"/>
           <stop offset="22%" stop-color="#ffe8a0" stop-opacity="0.28"/>
           <stop offset="48%" stop-color="#ffd080" stop-opacity="0.1"/>
           <stop offset="100%" stop-color="#ffc060" stop-opacity="0"/>
-        </radialGradient>
-        <radialGradient id="${floorId}" gradientUnits="userSpaceOnUse"
-          cx="${b.x}" cy="150" fx="${b.x}" fy="128" r="200">
-          <stop offset="0%" stop-color="#fff4c8" stop-opacity="0.42"/>
-          <stop offset="35%" stop-color="#ffe0a0" stop-opacity="0.18"/>
-          <stop offset="100%" stop-color="#ffd080" stop-opacity="0"/>
         </radialGradient>`;
     })
     .join('');
   const fills = bulbs
-    .map((b, i) => {
-      // Floor pool: light hits the stage (y≥111); stretch sideways for diffuse bounce.
-      const floorCy = 148;
-      const floorRx = 170;
-      const floorRy = 70;
-      return `<circle class="lamp-fill" data-lamp="${i}" cx="${b.x}" cy="${b.y}" r="220"
-            fill="url(#lamp-fill-${i})"/>
-        <ellipse class="lamp-floor" data-lamp="${i}" cx="${b.x}" cy="${floorCy}"
-            rx="${floorRx}" ry="${floorRy}" fill="url(#lamp-floor-${i})"/>`;
-    })
+    .map((b, i) => `<circle class="lamp-fill" data-lamp="${i}" cx="${b.x}" cy="${b.y}" r="220"
+            fill="url(#lamp-fill-${i})"/>`)
     .join('');
-  // Soft bounce along the wall–floor seam (indirect light).
-  const bounce = `<rect x="0" y="105" width="${SCREEN_W}" height="48" fill="url(#lamp-bounce)"/>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 350"
       width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
       <defs>
         ${defs}
-        <linearGradient id="lamp-bounce" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#fff0c0" stop-opacity="0.2"/>
-          <stop offset="55%" stop-color="#ffe8a8" stop-opacity="0.08"/>
-          <stop offset="100%" stop-color="#ffe8a8" stop-opacity="0"/>
-        </linearGradient>
+        <clipPath id="studio-light-wall-clip">
+          <rect x="0" y="0" width="${SCREEN_W}" height="${STUDIO_UPPER_H}"/>
+        </clipPath>
       </defs>
-      <g id="studio-light-root" display="none">
+      <g id="studio-light-root" display="none" clip-path="url(#studio-light-wall-clip)">
         ${fills}
-        ${bounce}
       </g>
     </svg>`;
 }

@@ -140,10 +140,12 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     letter on a point sector adds value × number of hits. ×2 doubles the
     score if the letter is present. Neighbouring wedges never share the same
     point value. The SVG rotates opposite the sector index so the arrow, the
-    host line and the score all name the same wedge. The disk rotates
-    continuously for about 8–10 s (mean 9 s) under Coulomb plus viscous
-    friction (ω̇ = −α − βω), not in 10° jumps. Initial ω is lower because
-    the disk only needs about one extra turn, not several revolutions. The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
+    host line and the score all name the same wedge.     The disk rotates continuously under Coulomb plus viscous
+    friction (ω̇ = −α − βω), not in 10° jumps, for 1.1–2.5 revolutions.
+    A tap (or NPC) picks a uniform random length in that range; holding Space
+    (or the canvas pointer) on «Кручу барабан» stretches toward 2.5 turns
+    (full hold ≈ 2 s). Duration scales with revolutions (mean ~9 s at 1.8 turns).
+    The replica and the spin start together (`Promise.all`). The rim is a thin metal stroke; labels sit near the outer edge (Б / П).
     Sectors alternate black/white as before.     The disk is larger than the DOS
     cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
     SVG overlays sit above the rear canvas (no framebuffer punch-holes); the drum tucks

@@ -101,10 +101,29 @@ export function wheelSectorLabelFontSize(label: string): number {
  * the returned value is the travelled fraction of the total angle.
  */
 export const WHEEL_STEP_DEG = 360 / WHEEL_SECTOR_COUNT;
-/** Mean duration is SPIN_DURATION_MS + (JITTER−1)/2 ≈ 9 s (random is 0..n−1). */
+/** Mean duration at 1.8 turns; scaled by actual revolutions (DIFF #26). */
 export const SPIN_DURATION_MS = 8000;
 export const SPIN_DURATION_JITTER_MS = 2001;
 export const SPIN_FRAME_MS = 16;
+export const SPIN_MIN_TURNS = 1.1;
+export const SPIN_MAX_TURNS = 2.5;
+/** Hold Space this long on «Кручу барабан» to reach SPIN_MAX_TURNS. */
+export const SPIN_HOLD_FULL_MS = 2000;
+
+/** Milliturns in [1100, 2500]. Tap/NPC: uniform random. Hold: lerp by hold time. */
+export function spinMilliturns(holdMs: number, randomMilliturns: number): number {
+  const span = Math.round((SPIN_MAX_TURNS - SPIN_MIN_TURNS) * 1000);
+  const min = Math.round(SPIN_MIN_TURNS * 1000);
+  if (holdMs <= 0) {
+    return min + Math.max(0, Math.min(span, randomMilliturns));
+  }
+  const t = Math.min(1, holdMs / SPIN_HOLD_FULL_MS);
+  return min + Math.round(t * span);
+}
+
+export function spinStepsFromMilliturns(milliturns: number, sectorCount: number): number {
+  return Math.max(1, Math.round((milliturns / 1000) * sectorCount));
+}
 /** βω₀/α at t=0 — viscous vs dry friction. */
 export const SPIN_VISCOUS_RATIO = 1.6;
 

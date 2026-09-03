@@ -44,7 +44,20 @@ import type { SupergameHudView } from './svgSupergameHud';
 import { firstTourGreeting, firstTourInvite, laterTourGreeting, laterTourInvite, broadcastWeekday, supergameGreeting, supergamePrizeIntro } from './hostIntro';
 import { buildPrizeBasket, basketTotal, type SupergamePrize } from './supergamePrizes';
 import { superWheelPrizes } from './superWheel';
-import { spinEase, SPIN_DURATION_JITTER_MS, SPIN_DURATION_MS, SPIN_FRAME_MS, WHEEL_SECTOR_COUNT, WHEEL_SECTORS, WHEEL_STEP_DEG } from './tvWheel';
+import {
+  spinEase,
+  spinMilliturns,
+  spinStepsFromMilliturns,
+  SPIN_DURATION_JITTER_MS,
+  SPIN_DURATION_MS,
+  SPIN_FRAME_MS,
+  SPIN_HOLD_FULL_MS,
+  SPIN_MAX_TURNS,
+  SPIN_MIN_TURNS,
+  WHEEL_SECTOR_COUNT,
+  WHEEL_SECTORS,
+  WHEEL_STEP_DEG,
+} from './tvWheel';
 
 /**
  * Direct port of the original game's MainThread (dpr:792-1647) plus its
@@ -316,6 +329,8 @@ class Game {
   private supergameAtRisk = false;
   private superSector = 0;
   private wheelSuperMode = false;
+  /** Hold length on «Кручу барабан» (ms); 0 → random 1.1–2.5 turns. */
+  private spinHoldMs = 0;
 
   constructor(ctx: GameContext) {
     this.humanSeats = ctx.options?.humanSeats ?? 1;
@@ -1116,28 +1131,23 @@ class Game {
     if (!hud) {
       s.fillRect(moneyOfs - 644, 30, 84, 7);
     }
-    const stride = moneyRecountStride(seat.score);
-    for (let i = stride; i <= seat.score; i += stride) {
-      if (hud) {
-        this.moneyShowScore = { seat: seatIdx, score: i };
-        this.moneyJitter = { seat: seatIdx, x: this.random(6) - 2, y: this.random(3) - 1 };
-        this.syncHud(true);
-      } else {
-        for (let c = 0; c < stride; c += 1) {
-          s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
-        }
-      }
-      const freq = this.random(10) + 50;
-      await this.m.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
+    const delta = seat.score - fromScore;
+    const stride = moneyRecountStride(delta);
+    let shown = fromScore;
+    if (hud) {
+      this.moneyShowScore = { seat: seatIdx, score: shown };
+      this.moneyJitter = null;
+      this.syncHud(true);
     }
-    const remainder = seat.score % stride;
-    if (remainder > 0) {
+    while (shown < seat.score) {
+      shown = Math.min(seat.score, shown + stride);
       if (hud) {
-        this.moneyShowScore = { seat: seatIdx, score: seat.score };
+        this.moneyShowScore = { seat: seatIdx, score: shown };
         this.moneyJitter = { seat: seatIdx, x: this.random(6) - 2, y: this.random(3) - 1 };
         this.syncHud(true);
       } else {
-        for (let c = 0; c < remainder; c += 1) {
+        const coins = Math.min(stride, seat.score - (shown - stride));
+        for (let c = 0; c < coins; c += 1) {
           s.drawSprite(SPRITE.MONEY, moneyOfs + this.random(7) * SCREEN_W - SCREEN_W + this.random(12) - 4, 1);
         }
       }
@@ -1153,7 +1163,14 @@ class Game {
    * the answer (e.g. NPCs never take the prize) while keeping the full
    * save/restore + setSilent + speech-bubble tail of the original.
    */
-  private async playerDecision(label1: string, label2: string, phrase0: string, phrase1: string, forced?: number): Promise<number> {
+  private async playerDecision(
+    label1: string,
+    label2: string,
+    phrase0: string,
+    phrase1: string,
+    forced?: number,
+    opts?: { deferSpeech?: boolean; measureHold?: boolean },
+  ): Promise<number> {
     const s = this.screen;
     const { input } = this.m;
     const seatIdx = this.curPlayer;
@@ -1218,16 +1235,33 @@ class Game {
     } else {
       s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, pairOfs, BACKBUF2);
     }
+    if (opts?.measureHold && result === 1) {
+      this.spinHoldMs = await this.measureActionHold();
+    } else {
+      this.spinHoldMs = 0;
+    }
     await this.yakubovichSetSilent();
-    await this.playerSay(result === 0 ? phrase0 : phrase1);
+    if (!opts?.deferSpeech) {
+      await this.playerSay(result === 0 ? phrase0 : phrase1);
+    }
     return result;
+  }
+
+  /** Space / pointer still down after «Кручу барабан» — extra drum travel. */
+  private async measureActionHold(): Promise<number> {
+    let holdMs = 0;
+    while (this.m.input.actionHeld && holdMs < SPIN_HOLD_FULL_MS) {
+      await this.delay(SPIN_FRAME_MS);
+      holdMs += SPIN_FRAME_MS;
+    }
+    return holdMs;
   }
 
   /**
    * Single right-hand yellow choice (DIFF #31). Human confirms with Space;
    * the seat leans right, then speaks the phrase.
    */
-  private async playerConfirm(phrase: string): Promise<void> {
+  private async playerConfirm(phrase: string, opts?: { deferSpeech?: boolean; measureHold?: boolean }): Promise<void> {
     const s = this.screen;
     const seatIdx = this.curPlayer;
     const { spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
@@ -1262,8 +1296,11 @@ class Game {
       s.screenCopy(bubbleW, bubbleH, bubbleOfs, BACKBUF2);
     }
     this.paintSeatSprite(seatIdx);
+    this.spinHoldMs = opts?.measureHold ? await this.measureActionHold() : 0;
     await this.yakubovichSetSilent();
-    await this.playerSay(phrase);
+    if (!opts?.deferSpeech) {
+      await this.playerSay(phrase);
+    }
   }
 
   // ----------------------------------------------------------------- scenes
@@ -1654,7 +1691,8 @@ class Game {
         s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
       }
       this.drawFortuneWheel(this.curSector);
-      await this.updateMoney(j, 0);
+      const moneyFrom = j === this.winner ? seat.score : 0;
+      await this.updateMoney(j, moneyFrom);
       this.hudIntroSeat = null;
       this.syncHud(true);
       this.syncDebug();
@@ -1903,12 +1941,17 @@ class Game {
     this.syncDebug();
   }
 
-  /** dpr:1229-1244. DIFF #26: friction spin, ~9 s, several revolutions. */
-  private async spinWheel(): Promise<void> {
+  /** dpr:1229-1244. DIFF #26: friction spin, 1.1–2.5 turns (hold stretches toward 2.5). */
+  private async spinWheel(holdMs = this.spinHoldMs): Promise<void> {
     const sectorCount = this.ctx.wheel?.getSectorCount() ?? WHEEL_SECTOR_COUNT;
     const stepDeg = this.ctx.wheel?.getStepDeg() ?? WHEEL_STEP_DEG;
-    const totalSteps = sectorCount + this.random(sectorCount);
-    const durationMs = SPIN_DURATION_MS + this.random(SPIN_DURATION_JITTER_MS);
+    const milliturns = spinMilliturns(holdMs, this.random(1401));
+    const totalSteps = spinStepsFromMilliturns(milliturns, sectorCount);
+    const turns = milliturns / 1000;
+    const meanTurns = (SPIN_MIN_TURNS + SPIN_MAX_TURNS) / 2;
+    const durationMs = Math.round(
+      (SPIN_DURATION_MS + this.random(SPIN_DURATION_JITTER_MS)) * (turns / meanTurns),
+    );
     const startDeg = -this.curSector * stepDeg;
     const deltaDeg = -totalSteps * stepDeg;
     this.playSfx('drumSpin', { loop: true });
@@ -2344,7 +2387,16 @@ class Game {
 
       await this.yakubovichTalk(this.playerName(this.curPlayer), 'Вращайте барабан!');
       if (human) {
-        if ((await this.playerDecision('Скажу   Кручу', 'СЛОВО  БАРАБАН', 'Скажу слово!', 'Кручу барабан!')) === 0) {
+        const choice = await this.playerDecision(
+          'Скажу   Кручу',
+          'СЛОВО  БАРАБАН',
+          'Скажу слово!',
+          'Кручу барабан!',
+          undefined,
+          { deferSpeech: true, measureHold: true },
+        );
+        if (choice === 0) {
+          await this.playerSay('Скажу слово!');
           const result = await this.tellWord();
           if (result === 'won') {
             this.winner = this.curPlayer;
@@ -2353,10 +2405,11 @@ class Game {
           }
           return 'next';
         }
+        await Promise.all([this.playerSay('Кручу барабан!'), this.spinWheel()]);
+      } else {
+        await this.yakubovichSetSilent();
+        await this.spinWheel();
       }
-
-      await this.yakubovichSetSilent();
-      await this.spinWheel();
       // Anti-cheat: drum result is committed before sector dialogue / letter pick.
       this.persistCheckpoint('after-spin');
     }
@@ -2558,8 +2611,8 @@ class Game {
 
     this.setScene('supergame-spin');
     await this.yakubovichTalk('Вращайте барабан супер-игры!');
-    await this.playerConfirm('Кручу барабан!');
-    await this.spinWheel();
+    await this.playerConfirm('Кручу барабан!', { deferSpeech: true, measureHold: true });
+    await Promise.all([this.playerSay('Кручу барабан!'), this.spinWheel()]);
     this.superPrize = superWheelPrizes()[this.superSector] ?? '';
     await this.yakubovichTalk(`Суперприз — ${this.superPrize}!`);
 

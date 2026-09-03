@@ -188,12 +188,56 @@ body {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  --stage-wall-top: #d8d8d8;
+  --stage-tile-face: #b8b8b8;
+  --stage-tile-grout: #8f8f8f;
+  /* CSS 3D perspective creates natural floor taper from bottom screen corners
+     (0,350)/(640,350) towards side walls (40,164)/(600,164) WITHOUT clipping tiles. */
+  --stage-floor-perspective: 1200px;
+  --stage-floor-tilt: 56deg;
+  /* Tile plane spans 3× stage width (−1…+1 screens) under the same perspective. */
+  --stage-floor-span: 3;
 }
 
-.stage-backdrop svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+.stage-wall-band {
+  position: absolute;
+  left: calc((1 - var(--stage-floor-span)) / 2 * 100%);
+  width: calc(var(--stage-floor-span) * 100%);
+  top: 0;
+  /* STUDIO_UPPER_H / VISIBLE_H — wall band above the floor plane */
+  height: 31.714%;
+  background: var(--stage-wall-top);
+}
+
+/* Floor plane from wall base to bottom of screen.
+   No clipping is applied so perspective continues seamlessly left and right (+1 screen each side). */
+.stage-floor {
+  position: absolute;
+  left: calc((1 - var(--stage-floor-span)) / 2 * 100%);
+  width: calc(var(--stage-floor-span) * 100%);
+  top: 31.714%;
+  bottom: 0;
+  overflow: visible;
+  perspective: var(--stage-floor-perspective);
+  perspective-origin: 50% 0%;
+}
+
+/* Rectangular ceramic grid in 3D perspective.
+   The perspective transformation tapers the grid towards the back wall,
+   naturally matching the side walls angle without clipping or cutting off any tiles. */
+.stage-floor-tiles {
+  position: absolute;
+  inset: 0;
+  height: 180%;
+  transform: rotateX(var(--stage-floor-tilt));
+  transform-origin: 50% 0%;
+  backface-visibility: hidden;
+  background-color: var(--stage-floor-base, var(--stage-tile-face));
+  background-position: calc(50% - 1px) 0;
+  background-image:
+    linear-gradient(var(--stage-tile-grout) 2px, transparent 2px),
+    linear-gradient(90deg, var(--stage-tile-grout) 2px, transparent 2px);
+  background-size: 48px 32px;
 }
 
 #legacy-canvas {
@@ -243,7 +287,7 @@ body {
   padding: 1rem;
   border: 0;
   border-radius: 4px;
-  background: rgba(7, 9, 15, 0.72);
+  background: #07090f;
   color: var(--ega-cyan);
   font: inherit;
   font-size: clamp(14px, 2.4vw, 22px);
@@ -275,7 +319,7 @@ body {
   height: 100%;
 }
 
-/* Soft lamp spill on walls + floor (above scenic SVG, over the rear canvas). */
+/* Lamp spill on the back wall only — normal blend avoids banding on sprites. */
 .studio-light-overlay {
   position: absolute;
   inset: 0;
@@ -446,10 +490,13 @@ body {
 .boxes-overlay svg,
 .players-overlay svg,
 .plate-overlay svg,
-.hud-overlay svg {
+.hud-overlay svg,
+.assist-overlay svg,
+.hand-overlay svg {
   display: block;
   width: 100%;
   height: 100%;
+  shape-rendering: crispEdges;
 }
 
 .hand-overlay {

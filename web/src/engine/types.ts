@@ -119,6 +119,11 @@ export interface InputApi {
   pollKeyPressed(): boolean;
   /** WaitForSingleObject(Enter, ms). */
   waitEnter(timeoutMs: number): Promise<boolean>;
+  /**
+   * Space or canvas pointer is currently down. Unlike poll/wait, this is not
+   * consumed — used to map hold length onto drum revolutions (DIFF #26).
+   */
+  readonly actionHeld: boolean;
   /** Shared hand cursor; the game script assigns min/max/step/ofs before its loops. */
   readonly hand: HandState;
   /** Activate text entry (name/word input). Echo and erase write through ScreenApi. */
