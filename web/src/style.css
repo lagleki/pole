@@ -193,7 +193,7 @@ body {
   --stage-tile-grout: #8f8f8f;
   /* CSS 3D perspective creates natural floor taper from bottom screen corners
      (0,350)/(640,350) towards side walls (40,164)/(600,164) WITHOUT clipping tiles. */
-  --stage-floor-perspective: 1200px;
+  --stage-floor-perspective: 640px;
   --stage-floor-tilt: 56deg;
   /* Tile plane spans 3× stage width (−1…+1 screens) under the same perspective. */
   --stage-floor-span: 3;
@@ -213,8 +213,8 @@ body {
    No clipping is applied so perspective continues seamlessly left and right (+1 screen each side). */
 .stage-floor {
   position: absolute;
-  left: calc((1 - var(--stage-floor-span)) / 2 * 100%);
-  width: calc(var(--stage-floor-span) * 100%);
+  left: 0;
+  right: 0;
   top: 31.714%;
   bottom: 0;
   overflow: visible;
@@ -224,11 +224,14 @@ body {
 
 /* Rectangular ceramic grid in 3D perspective.
    The perspective transformation tapers the grid towards the back wall,
-   naturally matching the side walls angle without clipping or cutting off any tiles. */
+   naturally matching the side walls angle without clipping or cutting off any tiles.
+   Spans 3× stage width (−1…+1 screens) centered under perspective. */
 .stage-floor-tiles {
   position: absolute;
-  inset: 0;
-  height: 180%;
+  left: calc((1 - var(--stage-floor-span)) / 2 * 100%);
+  width: calc(var(--stage-floor-span) * 100%);
+  top: 0;
+  height: 250%;
   transform: rotateX(var(--stage-floor-tilt));
   transform-origin: 50% 0%;
   backface-visibility: hidden;
@@ -237,7 +240,7 @@ body {
   background-image:
     linear-gradient(var(--stage-tile-grout) 2px, transparent 2px),
     linear-gradient(90deg, var(--stage-tile-grout) 2px, transparent 2px);
-  background-size: 48px 32px;
+  background-size: 64px 36px;
 }
 
 #legacy-canvas {
