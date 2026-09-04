@@ -2804,7 +2804,7 @@ class Game {
 
   /**
    * Walk the assistant across the board and open every still-closed letter
-   * (same flip cadence as openLetter, without scoring).
+   * (same flip cadence as openLetter, without scoring or per-card sting).
    */
   private async assistantRevealRemainingLetters(opts?: { leadInMs?: number }): Promise<void> {
     const s = this.screen;
@@ -2878,8 +2878,7 @@ class Game {
             s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
           }
           syncAssist(blitOfs, SPRITE.ASSIST_STAY);
-          this.playSfx('letterCorrect');
-          await this.waitKey(1450);
+          await this.waitKey(450);
         } else {
           const nextStep = stepDelta[(i3 + 1) & 3];
           if (k > 0 && walk + nextStep >= assistPos[k]) {
