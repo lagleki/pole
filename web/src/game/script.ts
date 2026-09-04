@@ -586,9 +586,9 @@ class Game {
     );
   }
 
-  /** Studio stack only — prize/splash keep framebuffer seat blits. */
+  /** SVG seats whenever the overlay exists, except the prize framebuffer scene. */
   private useSvgPlayers(): boolean {
-    return Boolean(this.ctx.players) && this.ctx.state.scene !== 'prize' && this.ctx.state.scene !== 'splash';
+    return Boolean(this.ctx.players) && this.ctx.state.scene !== 'prize';
   }
 
   /** Blit or SVG-sync one seat sprite (null clears). */
@@ -722,33 +722,20 @@ class Game {
     this.syncDebug();
   }
 
-  /** Studio chrome without the original RNG brick/character shuffle. */
-  private paintRestoredBackground(): void {
-    const s = this.screen;
-    if (!this.ctx.studio) {
-      s.fillRect(0, 10, SCREEN_W, 3);
-      s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
-      s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
-      s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
-      s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
-    }
-    this.brickKinds = restoredBrickKinds();
-    if (!this.ctx.studio) {
-      for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
-        s.drawSprite(SPRITE.BRICK1 + (i % 3), (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W, 1);
-      }
-      s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
-      s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
-    }
-    this.syncStudio(true);
+  /** Full studio from saved seats/board/wheel — every resume path. */
+  private paintRestoredStudio(): void {
+    this.paintStudioWalls(restoredBrickKinds());
+    this.drawBoardChrome();
+    this.paintAlphabetRow();
+    this.paintWordBoard();
+    this.paintSeats();
+    this.drawFortuneWheel(this.curSector);
   }
 
   private drawBoardChrome(): void {
     const s = this.screen;
     if (!this.ctx.studio) {
       s.fillRect(0x11580, 238, SCREEN_W, 7);
-    }
-    if (!this.ctx.studio) {
       s.drawSprite(SPRITE.WALL_LEFT, 25 * SCREEN_W, 7);
       s.drawSprite(SPRITE.WALL_RIGHT, 600 + 25 * SCREEN_W, 7);
     }
@@ -870,7 +857,7 @@ class Game {
       }
       if (seat.spriteId !== null) {
         if (!this.useSvgPlayers()) {
-          s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+          this.paintSeatSprite(j);
         }
         if (!this.ctx.hud) {
           s.print(seat.nameBytes, layout.labelOfs + 54 - (seat.nameBytes.length << 2) + 14 * SCREEN_W, 0, 14, 8);
@@ -880,17 +867,6 @@ class Game {
     }
     this.syncPlayers(true);
     this.syncHud(true);
-  }
-
-  private redrawRestoredRound(): void {
-    this.paintRestoredBackground();
-    this.drawBoardChrome();
-    this.paintAlphabetRow();
-    this.paintWordBoard();
-    this.paintSeats();
-    this.drawFortuneWheel(this.curSector);
-    this.snapshotRoundToBackbuf();
-    this.setScene('turn');
   }
 
   /** dpr:503-509 */
@@ -1425,29 +1401,11 @@ class Game {
   /** dpr:955-982 — one-time background, bricks, lamps, character shuffle. */
   private drawStaticBackground(): void {
     this.ctx.present?.setMode('svg');
-    const s = this.screen;
-    if (!this.ctx.studio) {
-      s.fillRect(0, 10, SCREEN_W, 3);
-      s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
-      s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
-      s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
-      s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
-    }
-
     const kinds = restoredBrickKinds();
     for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
-      const kind = this.random(3);
-      kinds[i] = kind;
-      if (!this.ctx.studio) {
-        s.drawSprite(SPRITE.BRICK1 + kind, (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W, 1);
-      }
+      kinds[i] = this.random(3);
     }
-    this.brickKinds = kinds;
-    if (!this.ctx.studio) {
-      s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
-      s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
-    }
-    this.syncStudio(true);
+    this.paintStudioWalls(kinds);
 
     const chars = this.characters;
     for (let i = 100; i >= 0; i -= 1) {
@@ -1455,6 +1413,29 @@ class Game {
       const b = this.random(chars.length);
       [chars[a], chars[b]] = [chars[b], chars[a]];
     }
+  }
+
+  /** Backdrop fills, brick wall, lamps. Live game randomizes `kinds`; resume uses i%3. */
+  private paintStudioWalls(kinds: readonly number[]): void {
+    const s = this.screen;
+    this.brickKinds = Array.from(kinds);
+    if (!this.ctx.studio) {
+      s.fillRect(0, 10, SCREEN_W, 3);
+      s.fillRect(0x320 * 8, 2, SCREEN_W, 8);
+      s.fillRect(0x410 * 8, 0x5e, SCREEN_W, 1);
+      s.fillRect(0x21c0 * 8, 2, SCREEN_W, 8);
+      s.fillRect(0x6770 * 8, 1, SCREEN_W, 8);
+      for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
+        s.drawSprite(
+          SPRITE.BRICK1 + kinds[i],
+          (i % 12) * 52 + 5 + (Math.floor(i / 12) * 31 + 15) * SCREEN_W,
+          1,
+        );
+      }
+      s.drawSprite(SPRITE.LAMP, 69 + 3 * SCREEN_W, 1);
+      s.drawSprite(SPRITE.LAMP, 559 + 3 * SCREEN_W, 1);
+    }
+    this.syncStudio(true);
   }
 
   /** dpr:990-1037 */
@@ -2718,6 +2699,9 @@ class Game {
    */
   private async thinkAndSolveSupergame(): Promise<boolean> {
     this.setScene('supergame-think');
+    // Drop a latched Enter from the letter-pick / drum confirm so the 60s bed
+    // is not stopped on the first countdown poll.
+    await this.m.input.waitEnter(0);
     this.playSfx('super60s', { loop: true, restart: true });
 
     if (!this.isHuman(this.curPlayer)) {
@@ -3025,10 +3009,10 @@ class Game {
     if (resume) {
       this.applyResume(resume);
       this.ctx.present?.setMode('svg');
+      this.paintRestoredStudio();
       if (this.skipToTurns) {
-        this.redrawRestoredRound();
-      } else {
-        this.paintRestoredBackground();
+        this.snapshotRoundToBackbuf();
+        this.setScene('turn');
       }
     } else {
       await this.splash();

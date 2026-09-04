@@ -10,6 +10,7 @@ import { VirtualClock } from '../engine/timing';
 import type { Machine } from '../engine/types';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import { createDebugState, runGame, type GameContext, type Scene } from './script';
+import type { PlayerSeatPose, PlayersView } from './svgPlayers';
 import { fonts, lib, ovl, pic } from './testAssets';
 
 interface Harness {
@@ -297,5 +298,50 @@ describe('full game script (headless, virtual time, real assets)', () => {
     expect(saveIdx).toBeLessThan(stingIdx);
     expect(saveIdx).toBeLessThan(enterIdx);
     expect(stingIdx).toBeLessThan(enterIdx);
+  }, 30_000);
+
+  it('in-round resume paints seat sprites before the first spin line', async () => {
+    const h = buildHarness(42, 1);
+    const synced: number[][] = [];
+    const players: PlayersView = {
+      loadSprites() {},
+      setVisible() {},
+      sync(seats: readonly PlayerSeatPose[]) {
+        synced.push(seats.map((seat) => seat.spriteId ?? -1));
+      },
+      setSeat() {},
+    };
+    h.ctx.players = players;
+    h.ctx.resume = {
+      version: PROGRESS_VERSION,
+      checkpoint: 'in-round',
+      rngState: 42,
+      humanSeats: 1,
+      charId: 2,
+      characters: [{ spriteId: 51, name: 'КРОЛИК' }],
+      seats: [
+        { spriteId: 17, nameBytes: [0x88, 0x83, 0x90, 0x8e, 0x8a], score: 15 },
+        { spriteId: 51, nameBytes: [0x90, 0x8e, 0x92, 0x84], score: 0 },
+        { spriteId: 50, nameBytes: [0x91, 0x8e, 0x82, 0x80], score: 5 },
+      ],
+      available: Array.from({ length: 32 }, (_, i) => (i === 0 ? 0x20 : 0x80 + i)),
+      curSector: 6,
+      winner: 3,
+      stage: 1,
+      curPlayer: 0,
+      movesForBox: 1,
+      prevWords: [3, -1, -1, -1, -1, -1, -1, -1],
+      guessedWord: [0x8a, 0x8e, 0x92],
+      remaindLetters: 3,
+      wordPos: 121,
+      opened: [false, false, false],
+      theme: 'ТЕМА',
+      topPlayers: [{ name: 'ТЕСТ', score: 10 }],
+    };
+
+    await driveFullGame(h, 400, () => synced.length > 0);
+
+    expect(synced[0]).toEqual([17, 51, 50]);
+    expect(h.sceneHistory).not.toContain('splash');
   }, 30_000);
 });

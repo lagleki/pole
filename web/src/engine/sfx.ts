@@ -105,6 +105,10 @@ function sfxUrl(file: string): string {
   return `${root}${SFX_DIR}/${file}`;
 }
 
+/** One-shot unlock; playing every mp3 at once aborts the long beds (players-enter, super-60s). */
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+
 /**
  * HTMLAudio playback. Skipped when muted, in Node, or under Playwright
  * (`navigator.webdriver`), matching host TTS.
@@ -199,36 +203,21 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
         primed = true;
         return Promise.resolve();
       }
-      const unlocks = SFX_IDS.map((id) => {
-        const player = element(id);
-        if (!player) {
-          return Promise.resolve();
-        }
-        player.muted = true;
-        const p = player.play();
-        if (!p || typeof p.then !== 'function') {
-          player.muted = false;
-          return Promise.resolve();
-        }
-        return p
-          .then(() => {
-            player.pause();
-            try {
-              player.currentTime = 0;
-            } catch {
-              /* empty */
-            }
-            player.muted = false;
-          })
-          .catch(() => {
-            player.muted = false;
-          });
-      });
-      priming = Promise.all(unlocks).then(() => {
-        primed = true;
-        priming = null;
-        flushPending();
-      });
+      const unlock = new Audio(SILENT_WAV);
+      unlock.muted = true;
+      const started = unlock.play();
+      priming = (started && typeof started.then === 'function' ? started : Promise.resolve())
+        .then(() => {
+          unlock.pause();
+        })
+        .catch(() => {
+          /* gesture may still unlock the document */
+        })
+        .then(() => {
+          primed = true;
+          priming = null;
+          flushPending();
+        });
       return priming;
     },
 

@@ -176,6 +176,7 @@ export function createHostTts(options: HostTtsOptions): HostTts {
   let pending: string | null = null;
   let pendingRole: TtsRole = 'host';
   let engine = 'none';
+  let primed = false;
   let nativeKick = 0;
   let nativeWatch = 0;
   let currentNative: SpeechSynthesisUtterance | null = null;
@@ -432,6 +433,13 @@ export function createHostTts(options: HostTtsOptions): HostTts {
       log('prime (user gesture)');
       if (player && !player.paused && player.currentSrc && !player.currentSrc.startsWith('data:')) {
         log('prime: already playing');
+        primed = true;
+        return Promise.resolve();
+      }
+      if (primed) {
+        if (pending && options.getEnabled()) {
+          dispatch(pending, pendingRole);
+        }
         return Promise.resolve();
       }
       if (player) {
@@ -440,6 +448,7 @@ export function createHostTts(options: HostTtsOptions): HostTts {
         return player.play().then(
           () => {
             player.pause();
+            primed = true;
             if (pending && options.getEnabled()) {
               log('prime: flushing pending', pending);
               dispatch(pending, pendingRole);
@@ -449,6 +458,7 @@ export function createHostTts(options: HostTtsOptions): HostTts {
           },
           (error: unknown) => {
             log('prime silent-play failed', error);
+            primed = true;
             if (pending && options.getEnabled()) {
               dispatch(pending, pendingRole);
             }
