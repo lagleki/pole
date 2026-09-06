@@ -139,14 +139,14 @@ app.innerHTML = `
 
       <div class="deck">
         <button id="restart-btn" type="button">Новая игра</button>
-        <button id="sound-toggle" type="button">Звук: ВЫКЛ</button>
+        <button id="sound-toggle" type="button">Музыка: ВКЛ</button>
         <button id="fullscreen-btn" type="button">На весь экран</button>
       </div>
 
       <p id="host-speech" class="sr-only" aria-live="polite" aria-atomic="true"></p>
 
       <p class="hint keys-hint">ПРОБЕЛ / клик — подтвердить и пропустить паузы · ←/→ — рука ·
-        ENTER — ввод имени/слова · буквы — набор текста · Ctrl+S — звук (голос ведущего и эффекты) · TAB — выключить звук · ESC — новая игра</p>
+        ENTER — ввод имени/слова · буквы — набор текста · кнопка «Музыка» — тема студии · Ctrl+S — голос и эффекты · TAB — выключить звук · ESC — новая игра</p>
     </section>
 
     <section id="admin-view" class="admin-view is-hidden">
@@ -281,10 +281,11 @@ let fontPlanes: PoleFonts | null = null;
 // One audio output for the whole session (its AudioContext unlocks on first gesture).
 const audioOutput = new WebAudioOutput();
 let soundEnabled: boolean = true;
+let musicEnabled: boolean = true;
 const persistEnabled = Number.isNaN(seedParam) && speedFactor === 1 && !skipToSupergame;
 const bootPrefs = persistEnabled ? loadPrefs() : {};
 if (typeof bootPrefs.soundEnabled === 'boolean') {
-  soundEnabled = bootPrefs.soundEnabled;
+  musicEnabled = bootPrefs.soundEnabled;
 }
 
 interface RunHandle {
@@ -305,7 +306,10 @@ const hostTts = createHostTts({
     hostSpeechLive.textContent = text;
   },
 });
-const gameSfx = createGameSfx({ getEnabled: () => soundEnabled });
+const gameSfx = createGameSfx({
+  getEnabled: () => soundEnabled,
+  getMusicEnabled: () => musicEnabled,
+});
 
 function setActiveTab(mode: 'play' | 'admin'): void {
   const playActive = mode === 'play';
@@ -324,14 +328,14 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function updateSoundButton(): void {
-  soundToggleBtn.textContent = `Звук: ${soundEnabled ? 'ВКЛ' : 'ВЫКЛ'}`;
+  soundToggleBtn.textContent = `Музыка: ${musicEnabled ? 'ВКЛ' : 'ВЫКЛ'}`;
 }
 
 function persistUiPrefs(): void {
   if (!persistEnabled) {
     return;
   }
-  savePrefs({ soundEnabled, humanSeats });
+  savePrefs({ soundEnabled: musicEnabled, humanSeats });
 }
 
 function setSoundEnabled(value: boolean): void {
@@ -345,6 +349,18 @@ function setSoundEnabled(value: boolean): void {
   } else {
     hostTts.cancel();
     gameSfx.stop();
+  }
+}
+
+function setMusicEnabled(value: boolean): void {
+  musicEnabled = value;
+  if (value) {
+    audioOutput.unlock().catch(() => {});
+    void Promise.all([hostTts.prime(), gameSfx.prime()]).then(() => {
+      gameSfx.retryPending();
+    });
+  } else {
+    gameSfx.stopMusic();
   }
   updateSoundButton();
   persistUiPrefs();
@@ -725,7 +741,7 @@ restartBtn.addEventListener('click', () => {
 });
 
 soundToggleBtn.addEventListener('click', () => {
-  setSoundEnabled(!soundEnabled);
+  setMusicEnabled(!musicEnabled);
 });
 
 fullscreenBtn.addEventListener('click', () => {

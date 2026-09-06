@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { PLAYERS_ENTER_UNDER_HOST, PLAYERS_ENTER_VOLUME, SFX_FILES } from './sfx';
+import { PLAYERS_ENTER_UNDER_HOST, PLAYERS_ENTER_VOLUME, SFX_FILES, isMusicSfx } from './sfx';
 
 const sfxDir = join(dirname(fileURLToPath(import.meta.url)), '../../public/assets/sfx');
 
@@ -20,5 +20,15 @@ describe('players-enter bed', () => {
     expect(PLAYERS_ENTER_VOLUME).toBeLessThan(0.35);
     expect(PLAYERS_ENTER_UNDER_HOST).toBeLessThan(PLAYERS_ENTER_VOLUME);
     expect(PLAYERS_ENTER_UNDER_HOST).toBeGreaterThan(0);
+  });
+});
+
+describe('music vs sfx', () => {
+  it('treats studio beds as music and letter/drum cues as effects', () => {
+    expect(isMusicSfx('playersEnter')).toBe(true);
+    expect(isMusicSfx('opening')).toBe(true);
+    expect(isMusicSfx('super60s')).toBe(true);
+    expect(isMusicSfx('drumSpin')).toBe(false);
+    expect(isMusicSfx('letterCorrect')).toBe(false);
   });
 });

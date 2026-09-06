@@ -4,8 +4,9 @@ import {
   SPIN_CRUISE_MS,
   SPIN_DURATION_JITTER_MS,
   SPIN_DURATION_MS,
-  SPIN_HOLD_FULL_MS,
   SPIN_LAST_MS,
+  SPIN_SUPER_MAX_TURNS,
+  SPIN_SUPER_MIN_TURNS,
   spinEase,
   spinFrictionProgress,
   spinMilliturns,
@@ -102,11 +103,11 @@ describe('cruise-then-brake spin delays', () => {
     expect(SPIN_DURATION_MS + (SPIN_DURATION_JITTER_MS - 1) / 2).toBe(9000);
   });
 
-  it('maps a tap to a random 1.1–2.5 turns and a full hold to 2.5', () => {
-    expect(spinMilliturns(0, 0)).toBe(1100);
-    expect(spinMilliturns(0, 1400)).toBe(2500);
-    expect(spinMilliturns(SPIN_HOLD_FULL_MS, 0)).toBe(2500);
-    expect(spinMilliturns(SPIN_HOLD_FULL_MS / 2, 0)).toBe(1800);
+  it('maps a random draw onto 1.1–2.5 turns (super-game uses a longer band)', () => {
+    expect(spinMilliturns(0)).toBe(1100);
+    expect(spinMilliturns(1400)).toBe(2500);
+    expect(spinMilliturns(0, SPIN_SUPER_MIN_TURNS, SPIN_SUPER_MAX_TURNS)).toBe(3200);
+    expect(spinMilliturns(2300, SPIN_SUPER_MIN_TURNS, SPIN_SUPER_MAX_TURNS)).toBe(5500);
     expect(spinStepsFromMilliturns(1100, 36)).toBe(40);
     expect(spinStepsFromMilliturns(2500, 36)).toBe(90);
   });

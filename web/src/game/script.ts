@@ -48,12 +48,14 @@ import {
   spinEase,
   spinMilliturns,
   spinStepsFromMilliturns,
+  spinTurnSpan,
   SPIN_DURATION_JITTER_MS,
   SPIN_DURATION_MS,
   SPIN_FRAME_MS,
-  SPIN_HOLD_FULL_MS,
   SPIN_MAX_TURNS,
   SPIN_MIN_TURNS,
+  SPIN_SUPER_MAX_TURNS,
+  SPIN_SUPER_MIN_TURNS,
   WHEEL_SECTOR_COUNT,
   WHEEL_SECTORS,
   WHEEL_STEP_DEG,
@@ -329,8 +331,6 @@ class Game {
   private supergameAtRisk = false;
   private superSector = 0;
   private wheelSuperMode = false;
-  /** Hold length on «Кручу барабан» (ms); 0 → random 1.1–2.5 turns. */
-  private spinHoldMs = 0;
 
   constructor(ctx: GameContext) {
     this.humanSeats = ctx.options?.humanSeats ?? 1;
@@ -1145,7 +1145,7 @@ class Game {
     phrase0: string,
     phrase1: string,
     forced?: number,
-    opts?: { deferSpeech?: boolean; measureHold?: boolean },
+    opts?: { deferSpeech?: boolean },
   ): Promise<number> {
     const s = this.screen;
     const { input } = this.m;
@@ -1211,11 +1211,6 @@ class Game {
     } else {
       s.screenCopy(bubbleW * 2 + bubbleGap, bubbleH, pairOfs, BACKBUF2);
     }
-    if (opts?.measureHold && result === 1) {
-      this.spinHoldMs = await this.measureActionHold();
-    } else {
-      this.spinHoldMs = 0;
-    }
     await this.yakubovichSetSilent();
     if (!opts?.deferSpeech) {
       await this.playerSay(result === 0 ? phrase0 : phrase1);
@@ -1223,21 +1218,11 @@ class Game {
     return result;
   }
 
-  /** Space / pointer still down after «Кручу барабан» — extra drum travel. */
-  private async measureActionHold(): Promise<number> {
-    let holdMs = 0;
-    while (this.m.input.actionHeld && holdMs < SPIN_HOLD_FULL_MS) {
-      await this.delay(SPIN_FRAME_MS);
-      holdMs += SPIN_FRAME_MS;
-    }
-    return holdMs;
-  }
-
   /**
    * Single right-hand yellow choice (DIFF #31). Human confirms with Space;
    * the seat leans right, then speaks the phrase.
    */
-  private async playerConfirm(phrase: string, opts?: { deferSpeech?: boolean; measureHold?: boolean }): Promise<void> {
+  private async playerConfirm(phrase: string, opts?: { deferSpeech?: boolean }): Promise<void> {
     const s = this.screen;
     const seatIdx = this.curPlayer;
     const { spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
@@ -1272,7 +1257,6 @@ class Game {
       s.screenCopy(bubbleW, bubbleH, bubbleOfs, BACKBUF2);
     }
     this.paintSeatSprite(seatIdx);
-    this.spinHoldMs = opts?.measureHold ? await this.measureActionHold() : 0;
     await this.yakubovichSetSilent();
     if (!opts?.deferSpeech) {
       await this.playerSay(phrase);
@@ -1922,11 +1906,13 @@ class Game {
     this.syncDebug();
   }
 
-  /** dpr:1229-1244. DIFF #26: friction spin, 1.1–2.5 turns (hold stretches toward 2.5). */
-  private async spinWheel(holdMs = this.spinHoldMs): Promise<void> {
+  /** dpr:1229-1244. DIFF #26: friction spin, random 1.1–2.5 turns (super-game 3.2–5.5). */
+  private async spinWheel(): Promise<void> {
     const sectorCount = this.ctx.wheel?.getSectorCount() ?? WHEEL_SECTOR_COUNT;
     const stepDeg = this.ctx.wheel?.getStepDeg() ?? WHEEL_STEP_DEG;
-    const milliturns = spinMilliturns(holdMs, this.random(1401));
+    const minTurns = this.wheelSuperMode ? SPIN_SUPER_MIN_TURNS : SPIN_MIN_TURNS;
+    const maxTurns = this.wheelSuperMode ? SPIN_SUPER_MAX_TURNS : SPIN_MAX_TURNS;
+    const milliturns = spinMilliturns(this.random(spinTurnSpan(minTurns, maxTurns) + 1), minTurns, maxTurns);
     const totalSteps = spinStepsFromMilliturns(milliturns, sectorCount);
     const turns = milliturns / 1000;
     const meanTurns = (SPIN_MIN_TURNS + SPIN_MAX_TURNS) / 2;
@@ -2374,7 +2360,7 @@ class Game {
           'Скажу слово!',
           'Кручу барабан!',
           undefined,
-          { deferSpeech: true, measureHold: true },
+          { deferSpeech: true },
         );
         if (choice === 0) {
           await this.playerSay('Скажу слово!');
@@ -2592,7 +2578,7 @@ class Game {
 
     this.setScene('supergame-spin');
     await this.yakubovichTalk('Вращайте барабан супер-игры!');
-    await this.playerConfirm('Кручу барабан!', { deferSpeech: true, measureHold: true });
+    await this.playerConfirm('Кручу барабан!', { deferSpeech: true });
     await Promise.all([this.playerSay('Кручу барабан!'), this.spinWheel()]);
     this.superPrize = superWheelPrizes()[this.superSector] ?? '';
     await this.yakubovichTalk(`Суперприз — ${this.superPrize}!`);

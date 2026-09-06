@@ -39,6 +39,25 @@ export const SFX_FILES = {
 
 export type SfxId = keyof typeof SFX_FILES;
 
+/** Beds and themes — gated by the Музыка button, not by Ctrl+S. */
+export const MUSIC_SFX_IDS = [
+  'opening',
+  'openingOld',
+  'commercial',
+  'playersEnter',
+  'fanfare',
+  'superGame',
+  'super60s',
+  'prizesStudio',
+  'sponsor',
+] as const satisfies readonly SfxId[];
+
+const MUSIC_SFX = new Set<SfxId>(MUSIC_SFX_IDS);
+
+export function isMusicSfx(id: SfxId): boolean {
+  return MUSIC_SFX.has(id);
+}
+
 export interface SfxPlayOptions {
   /** Restart if already playing. Default true. */
   restart?: boolean;
@@ -65,6 +84,8 @@ export interface GameSfx {
   play(id: SfxId, options?: SfxPlayOptions): void;
   stop(id?: SfxId): void;
   setVolume(id: SfxId, volume: number): void;
+  /** Stop looping beds (Музыка: ВЫКЛ) without killing letter/drum cues. */
+  stopMusic(): void;
   /** Unlock HTMLAudio on a user gesture. Safe to call again; does not pause playing cues. */
   prime(): Promise<void>;
   /** Create `<audio>` nodes and start loading mp3 before the first gesture. */
@@ -115,7 +136,7 @@ const SILENT_WAV =
  */
 const SFX_IDS = Object.keys(SFX_FILES) as SfxId[];
 
-export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
+export function createGameSfx(options: { getEnabled: () => boolean; getMusicEnabled: () => boolean }): GameSfx {
   const players = new Map<SfxId, HTMLAudioElement>();
   const pending = new Map<SfxId, SfxPlayOptions>();
   let primed = false;
@@ -172,11 +193,18 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
     }
   };
 
+  const cueAllowed = (id: SfxId): boolean => {
+    if (!audioPlaybackAllowed()) {
+      return false;
+    }
+    return isMusicSfx(id) ? options.getMusicEnabled() : options.getEnabled();
+  };
+
   const flushPending = (): void => {
     const queued = [...pending.entries()];
     pending.clear();
     for (const [id, playOptions] of queued) {
-      if (options.getEnabled()) {
+      if (cueAllowed(id)) {
         start(id, playOptions);
       }
     }
@@ -241,7 +269,7 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
     },
 
     play(id: SfxId, playOptions: SfxPlayOptions = {}): void {
-      if (!options.getEnabled() || !audioPlaybackAllowed()) {
+      if (!cueAllowed(id)) {
         return;
       }
       if (!primed) {
@@ -256,6 +284,22 @@ export function createGameSfx(options: { getEnabled: () => boolean }): GameSfx {
       const player = players.get(id);
       if (player) {
         player.volume = clampVolume(volume);
+      }
+    },
+
+    stopMusic(): void {
+      for (const id of MUSIC_SFX_IDS) {
+        pending.delete(id);
+        const player = players.get(id);
+        if (player) {
+          player.loop = false;
+          player.pause();
+          try {
+            player.currentTime = 0;
+          } catch {
+            /* empty */
+          }
+        }
       }
     },
 

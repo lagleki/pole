@@ -107,18 +107,23 @@ export const SPIN_DURATION_JITTER_MS = 2001;
 export const SPIN_FRAME_MS = 16;
 export const SPIN_MIN_TURNS = 1.1;
 export const SPIN_MAX_TURNS = 2.5;
-/** Hold Space this long on «Кручу барабан» to reach SPIN_MAX_TURNS. */
-export const SPIN_HOLD_FULL_MS = 2000;
+/** Super-game drum: longer travel so the 7-wedge reel feels like a real spin. */
+export const SPIN_SUPER_MIN_TURNS = 3.2;
+export const SPIN_SUPER_MAX_TURNS = 5.5;
 
-/** Milliturns in [1100, 2500]. Tap/NPC: uniform random. Hold: lerp by hold time. */
-export function spinMilliturns(holdMs: number, randomMilliturns: number): number {
-  const span = Math.round((SPIN_MAX_TURNS - SPIN_MIN_TURNS) * 1000);
-  const min = Math.round(SPIN_MIN_TURNS * 1000);
-  if (holdMs <= 0) {
-    return min + Math.max(0, Math.min(span, randomMilliturns));
-  }
-  const t = Math.min(1, holdMs / SPIN_HOLD_FULL_MS);
-  return min + Math.round(t * span);
+export function spinTurnSpan(minTurns: number, maxTurns: number): number {
+  return Math.round((maxTurns - minTurns) * 1000);
+}
+
+/** Uniform milliturns in [minTurns, maxTurns]; `randomMilliturns` is 0..span inclusive. */
+export function spinMilliturns(
+  randomMilliturns: number,
+  minTurns = SPIN_MIN_TURNS,
+  maxTurns = SPIN_MAX_TURNS,
+): number {
+  const span = spinTurnSpan(minTurns, maxTurns);
+  const min = Math.round(minTurns * 1000);
+  return min + Math.max(0, Math.min(span, randomMilliturns));
 }
 
 export function spinStepsFromMilliturns(milliturns: number, sectorCount: number): number {
