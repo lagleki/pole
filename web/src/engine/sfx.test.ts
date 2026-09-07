@@ -32,3 +32,9 @@ describe('music vs sfx', () => {
     expect(isMusicSfx('letterCorrect')).toBe(false);
   });
 });
+
+describe('winnerTour vs wordCorrect', () => {
+  it('shares the same victory sting file (round-end must not double-play it)', () => {
+    expect(SFX_FILES.winnerTour).toBe(SFX_FILES.wordCorrect);
+  });
+});

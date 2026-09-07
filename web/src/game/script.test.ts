@@ -233,6 +233,7 @@ describe('full game script (headless, virtual time, real assets)', () => {
         timeline.push(id ? `stop:${id}` : 'stop');
       },
       setVolume() {},
+      syncMusicVolumes() {},
       stopMusic() {},
       async prime() {},
       warmup() {},

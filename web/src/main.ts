@@ -117,7 +117,7 @@ app.innerHTML = `
           <div id="adware-overlay" class="adware-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>
           <div id="supergame-overlay" class="supergame-overlay" hidden></div>
-          <button id="audio-gate" class="audio-gate" type="button" hidden>
+          <button id="audio-gate" class="audio-gate" type="button">
             Коснитесь экрана, чтобы включить звук
           </button>
         </div>
@@ -359,9 +359,9 @@ function setMusicEnabled(value: boolean): void {
     void Promise.all([hostTts.prime(), gameSfx.prime()]).then(() => {
       gameSfx.retryPending();
     });
-  } else {
-    gameSfx.stopMusic();
   }
+  // Музыка: ВЫКЛ — volume 0 on beds; ВКЛ — restore. Do not stop/rewind.
+  gameSfx.syncMusicVolumes();
   updateSoundButton();
   persistUiPrefs();
 }
@@ -645,11 +645,13 @@ function skipAudioGate(): boolean {
 
 async function waitForAudioGesture(): Promise<void> {
   if (skipAudioGate()) {
+    audioGate.hidden = true;
     await Promise.all([hostTts.prime(), gameSfx.prime()]);
     gameSfx.retryPending();
     return;
   }
   gameSfx.warmup();
+  // Keep covering the CRT while assets prerender behind the opaque gate.
   audioGate.hidden = false;
   await new Promise<void>((resolve) => {
     let done = false;
@@ -1039,6 +1041,10 @@ function applyOvl(parsedOvl: OvlFile): void {
 }
 
 async function loadBundledAssets(): Promise<void> {
+  const firstBoot = !assetsReady;
+  // First paint already shows «Коснитесь»; attach the listener before fetches so
+  // a tap during load counts, and the opaque gate covers studio prerender.
+  const audioGesture = firstBoot ? waitForAudioGesture() : Promise.resolve();
   statusEl.textContent = 'Loading bundled assets...';
   const [libJson, fntJson, tourJson, picJson] = await Promise.all([
     fetchJsonAsset<LibJson>(publicAsset('assets/POLE2.LIB.json')),
@@ -1063,12 +1069,12 @@ async function loadBundledAssets(): Promise<void> {
   summarizeState();
   renderQuestions();
   gameSfx.warmup();
-  prerenderStudioBehindGate();
-  await warmCompositorLayers();
-
-  if (!assetsReady) {
+  if (firstBoot) {
+    prerenderStudioBehindGate();
+    await warmCompositorLayers();
+    await audioGesture;
     assetsReady = true;
-    void waitForAudioGesture().then(() => gameLoop());
+    void gameLoop();
   } else {
     abortCurrentRun('assets-reloaded');
   }

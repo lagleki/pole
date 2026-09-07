@@ -3082,9 +3082,10 @@ class Game {
 
         if (!allRemoved) {
           this.setScene('round-end');
-          this.playSfx('winnerTour');
+          // wordCorrect already started on a whole-word guess — do not restart
+          // the same sting as winnerTour, and do not cut the playing cue.
           if (!roundWon) {
-            // Word completed letter-by-letter: current player wins (dpr:1515-1518).
+            this.playSfx('winnerTour');
           }
           await this.yakubovichTalk(this.playerName(this.curPlayer), 'выиграл раунд!');
           await this.waitKey(1000);

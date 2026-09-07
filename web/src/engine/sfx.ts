@@ -84,7 +84,12 @@ export interface GameSfx {
   play(id: SfxId, options?: SfxPlayOptions): void;
   stop(id?: SfxId): void;
   setVolume(id: SfxId, volume: number): void;
-  /** Stop looping beds (Музыка: ВЫКЛ) without killing letter/drum cues. */
+  /**
+   * Apply Музыка ВКЛ/ВЫКЛ as volume 0 vs restored base volumes.
+   * Does not pause or rewind beds — they keep playing silently until unmuted.
+   */
+  syncMusicVolumes(): void;
+  /** Stop looping beds without killing letter/drum cues. */
   stopMusic(): void;
   /** Unlock HTMLAudio on a user gesture. Safe to call again; does not pause playing cues. */
   prime(): Promise<void>;
@@ -139,6 +144,8 @@ const SFX_IDS = Object.keys(SFX_FILES) as SfxId[];
 export function createGameSfx(options: { getEnabled: () => boolean; getMusicEnabled: () => boolean }): GameSfx {
   const players = new Map<SfxId, HTMLAudioElement>();
   const pending = new Map<SfxId, SfxPlayOptions>();
+  /** Last requested volume per music cue (before Музыка mute). */
+  const musicBaseVolume = new Map<SfxId, number>();
   let primed = false;
   let priming: Promise<void> | null = null;
   let gestureRetryHook: (() => void) | null = null;
@@ -168,14 +175,31 @@ export function createGameSfx(options: { getEnabled: () => boolean; getMusicEnab
     return player;
   };
 
+  const audibleVolume = (id: SfxId, base: number): number => {
+    const clamped = clampVolume(base);
+    if (isMusicSfx(id) && !options.getMusicEnabled()) {
+      return 0;
+    }
+    return clamped;
+  };
+
+  const applyMusicPlayerVolume = (id: SfxId, player: HTMLAudioElement): void => {
+    const base = musicBaseVolume.get(id) ?? player.volume;
+    player.volume = audibleVolume(id, base);
+  };
+
   const start = (id: SfxId, playOptions: SfxPlayOptions): void => {
     const player = element(id);
     if (!player) {
       return;
     }
     const restart = playOptions.restart !== false;
+    const base = clampVolume(playOptions.volume ?? 1);
     player.loop = Boolean(playOptions.loop);
-    player.volume = clampVolume(playOptions.volume ?? 1);
+    if (isMusicSfx(id)) {
+      musicBaseVolume.set(id, base);
+    }
+    player.volume = audibleVolume(id, base);
     player.muted = false;
     if (restart) {
       try {
@@ -197,7 +221,8 @@ export function createGameSfx(options: { getEnabled: () => boolean; getMusicEnab
     if (!audioPlaybackAllowed()) {
       return false;
     }
-    return isMusicSfx(id) ? options.getMusicEnabled() : options.getEnabled();
+    // Music cues always start; Музыка: ВЫКЛ only zeros their volume.
+    return isMusicSfx(id) ? true : options.getEnabled();
   };
 
   const flushPending = (): void => {
@@ -281,9 +306,22 @@ export function createGameSfx(options: { getEnabled: () => boolean; getMusicEnab
     },
 
     setVolume(id: SfxId, volume: number): void {
+      const base = clampVolume(volume);
+      if (isMusicSfx(id)) {
+        musicBaseVolume.set(id, base);
+      }
       const player = players.get(id);
       if (player) {
-        player.volume = clampVolume(volume);
+        player.volume = audibleVolume(id, base);
+      }
+    },
+
+    syncMusicVolumes(): void {
+      for (const id of MUSIC_SFX_IDS) {
+        const player = players.get(id);
+        if (player) {
+          applyMusicPlayerVolume(id, player);
+        }
       }
     },
 
