@@ -43,6 +43,7 @@ function startDevServer() {
       BROWSER: 'none',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
   });
 
   child.stdout.on('data', (chunk) => {
@@ -57,12 +58,28 @@ function startDevServer() {
     stdout,
     stderr,
     async stop() {
+      const killTree = (signal) => {
+        if (child.pid && process.platform !== 'win32') {
+          try {
+            process.kill(-child.pid, signal);
+            return;
+          } catch {
+            // Fall through to direct kill.
+          }
+        }
+        try {
+          child.kill(signal);
+        } catch {
+          // Already gone.
+        }
+      };
       if (child.exitCode === null) {
-        child.kill('SIGTERM');
+        killTree('SIGTERM');
         await delay(500);
       }
       if (child.exitCode === null) {
-        child.kill('SIGKILL');
+        killTree('SIGKILL');
+        await delay(250);
       }
       await writeFile(serverLogPath, `${stdout.join('')}\n${stderr.join('')}`.trimStart(), 'utf8');
     },
@@ -566,21 +583,29 @@ async function captureSmokeFlow() {
     console.log(`Report: ${reportPath}`);
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await Promise.race([browser.close(), delay(5000)]);
+      } catch {
+        // Ignore close races on environments where Chromium hangs.
+      }
     }
     await server.stop();
   }
 }
 
-captureSmokeFlow().catch(async (error) => {
-  const summary = {
-    baseUrl: `${baseUrl}/?fast=${FAST}`,
-    error: error instanceof Error ? error.message : String(error),
-  };
-  await mkdir(outputDir, { recursive: true });
-  if (!reportWritten) {
-    await writeFile(reportPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
-  }
-  console.error(summary.error);
-  process.exitCode = 1;
-});
+captureSmokeFlow()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch(async (error) => {
+    const summary = {
+      baseUrl: `${baseUrl}/?fast=${FAST}`,
+      error: error instanceof Error ? error.message : String(error),
+    };
+    await mkdir(outputDir, { recursive: true });
+    if (!reportWritten) {
+      await writeFile(reportPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+    }
+    console.error(summary.error);
+    process.exit(1);
+  });

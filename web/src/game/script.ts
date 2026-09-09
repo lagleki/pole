@@ -1492,6 +1492,9 @@ class Game {
 
     // dpr:1034 — seats stay empty until presentation reveals them one by one.
     this.drawFortuneWheel(this.curSector);
+    // WEB: letter blanks on the board from round start, before greetings and
+    // before selectWord announces the question/theme.
+    this.chooseRoundWord();
     this.stopSfx('opening');
     this.stopSfx('openingOld');
     // Music only after the between-rounds save and studio chrome are in place.
@@ -1668,9 +1671,13 @@ class Game {
     this.winner = 3;
   }
 
-  /** dpr:1091-1115 */
-  private async selectWord(): Promise<void> {
-    this.setScene('word-select');
+  /**
+   * Pick this stage's puzzle and paint letter blanks on the board.
+   * Called from stageSetup so blanks are visible for the whole round open
+   * (greetings + presentation) before selectWord announces the theme.
+   * dpr:1091-1105 (selection + blank paint); announcement stays in selectWord.
+   */
+  private chooseRoundWord(): OvlQuestion {
     const s = this.screen;
     const { questions } = this.ctx;
     if (questions.length === 0) {
@@ -1704,12 +1711,25 @@ class Game {
         s.fillRect((i << 4) + this.wordPos + 11 * SCREEN_W, 19, 14, 8);
       }
     }
+    this.syncDebug();
+    return question;
+  }
 
+  /** dpr:1091-1115 — announce theme; blanks were painted in stageSetup. */
+  private async selectWord(): Promise<void> {
+    this.setScene('word-select');
+    // stageSetup already chose and painted the word; keep a safe fallback.
+    if (this.guessedWord.length === 0) {
+      this.chooseRoundWord();
+    } else {
+      this.paintWordBoard();
+    }
+    const theme = this.ctx.state.theme;
     await this.yakubovichSetSilent();
     await this.yakubovichTalk('И вот задание на этот тур.');
     await this.yakubovichSetSilent();
     this.setSfxVolume('playersEnter', PLAYERS_ENTER_UNDER_HOST);
-    await this.yakubovichTalk(question.theme);
+    await this.yakubovichTalk(theme);
     // DIFF #28: DOS waited for Space here; continue into the first spin.
     await this.yakubovichSetSilent();
     this.syncDebug();
@@ -2660,6 +2680,8 @@ class Game {
       }
     }
 
+    // Same as selectWord: blanks must be on screen before the theme is spoken.
+    await this.delay(500);
     await this.yakubovichSetSilent();
     await this.yakubovichTalk('И вот задание на супер-игру.');
     await this.yakubovichSetSilent();

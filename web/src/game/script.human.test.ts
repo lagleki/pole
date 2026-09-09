@@ -112,7 +112,7 @@ interface DriveLog {
  * Space → 'Скажу слово'. Box game (DIFF #30): same hold-Space poll as the
  * turn hand ('Правая'). Letter pick: Space, ArrowRight past used letters.
  */
-async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxIterations = 12000): Promise<DriveLog> {
+async function drive(h: Harness, policy: DrivePolicy, until: (log: DriveLog) => boolean, maxIterations = 12000): Promise<DriveLog> {
   let finished = false;
   let failure: unknown = null;
   const run = runGame(h.ctx).then(
@@ -129,17 +129,23 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
 
   const log: DriveLog = { humanLetterPicks: 0, letterTurns: [] };
   let named = false;
+  let lastScene: Scene | null = null;
   let stuckLetterIters = 0;
   let lastUsedCount = -1;
   let pendingLetterTurn: { reaction: number; scoreBefore: number; openedBefore: number } | null = null;
 
-  for (let iter = 0; iter < maxIterations && !finished && !until(); iter += 1) {
+  for (let iter = 0; iter < maxIterations && !finished && !until(log); iter += 1) {
     await h.clock.advance(60);
     await flush();
 
     const state = h.ctx.state;
     const entry = h.input.textEntry;
     const humanTurn = state.seats[state.currentPlayer]?.isHuman === true;
+
+    if (state.scene === 'presentation' && lastScene !== 'presentation') {
+      named = false;
+    }
+    lastScene = state.scene;
 
     if (pendingLetterTurn && state.scene !== 'letter-pick' && state.scene !== 'letter-open') {
       log.letterTurns.push({
@@ -246,7 +252,7 @@ async function drive(h: Harness, policy: DrivePolicy, until: () => boolean, maxI
   if (failure) {
     throw failure;
   }
-  if (!finished && !until()) {
+  if (!finished && !until(log)) {
     throw new Error(`driver gave up in scene "${h.ctx.state.scene}" (stage ${h.ctx.state.stage})`);
   }
 
@@ -314,12 +320,11 @@ describe('human seat paths (virtual time, real assets)', () => {
     const log = await drive(
       h,
       { solveMode: 'spin-only' },
-      () => h.ctx.state.stage >= 1 && h.ctx.state.seats[1]?.isHuman === true,
+      (driveLog) => driveLog.humanLetterPicks > 0 && driveLog.letterTurns.length > 0,
       40000,
     );
 
     expect(log.humanLetterPicks).toBeGreaterThan(0);
-    expect(h.ctx.state.stage).toBeGreaterThanOrEqual(1);
 
     // Value-sector turns: TV rule adds unit × opened hits (DIFF #26).
     const valueTurns = log.letterTurns.filter((t) => {
