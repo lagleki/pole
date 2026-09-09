@@ -12,7 +12,8 @@ export interface AssistView {
     sprites: readonly { width: number; height: number; pixels: Uint8Array }[],
     palette: readonly PaletteColor[],
   ): void;
-  sync(active: boolean, ofs: number, spriteId: number): void;
+  /** faceLeft mirrors the sprite horizontally (walk toward the left). */
+  sync(active: boolean, ofs: number, spriteId: number, faceLeft?: boolean): void;
   setVisible(visible: boolean): void;
 }
 
@@ -92,14 +93,18 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
   }
   const frames = [...host.querySelectorAll<SVGGElement>('.assist-frame')];
 
+  const widths = new Map<number, number>();
+
   return {
     loadSprites(sprites, palette): void {
+      widths.clear();
       for (const frame of frames) {
         const id = Number(frame.getAttribute('data-sprite'));
         const sprite = sprites[id];
         if (!sprite) {
           continue;
         }
+        widths.set(id, sprite.width);
         frame.innerHTML = indexedSpriteToSvg(
           sprite.pixels,
           sprite.width,
@@ -109,14 +114,19 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
         );
       }
     },
-    sync(active, ofs, spriteId): void {
+    sync(active, ofs, spriteId, faceLeft = false): void {
       if (!active) {
         setSvgShown(root, false);
         host.hidden = true;
         return;
       }
       const { x, y } = assistXY(ofs);
-      root.setAttribute('transform', `translate(${x} ${y})`);
+      const w = widths.get(spriteId) ?? 25;
+      // Mirror in place so the feet stay on the same walk offset while facing left.
+      root.setAttribute(
+        'transform',
+        faceLeft ? `translate(${x + w} ${y}) scale(-1 1)` : `translate(${x} ${y})`,
+      );
       setSvgShown(root, true);
       host.hidden = false;
       for (const frame of frames) {

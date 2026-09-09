@@ -103,7 +103,7 @@ describe('svg studio', () => {
     expect(WALL_Y).toBe(25);
   });
 
-  it('spans the back wall full-width; assistant walks edge to edge behind side walls', () => {
+  it('spans the back wall full-width; assistant walk path covers full width behind side walls', () => {
     const back = backWallRect();
     expect(back).toEqual({ x: 0, y: BACK_WALL_Y, w: 640, h: BACK_WALL_H });
     expect(ASSIST_WALK_X0).toBe(0);

@@ -2108,6 +2108,95 @@ class Game {
     return i;
   }
 
+
+  /**
+   * Assistant card-open walk: enter from the RIGHT, open stops RIGHT→LEFT,
+   * then after the last needed card exit back to the RIGHT (not across to the left).
+   * `assistPos[1..hits]` must list stops left→right so assistPos[hits] is the
+   * rightmost card (opened first while walking left).
+   */
+  private async assistantOpenWalk(
+    assistPos: number[],
+    hits: number,
+    openAtStop: (stopK: number) => void,
+    opts?: { dwellMs?: number; letterSting?: boolean },
+  ): Promise<void> {
+    const s = this.screen;
+    const stepDelta = [3, 10, 0, 12];
+    const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
+    let i3 = 0;
+    const leftEdge = ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X0;
+    const rightEdge = ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X1;
+    let walk = rightEdge;
+    let k = hits;
+    /** -1 while opening (right→left); +1 returning to the right wing. */
+    let dir = -1;
+    const assist = this.ctx.assist;
+    const syncAssist = (ofs: number, spriteId: number): void => {
+      if (assist) {
+        // Sprites face right (exit path). Mirror while walking/opening leftward.
+        assist.sync(true, ofs, spriteId, dir < 0);
+      }
+    };
+    const dwellMs = opts?.dwellMs ?? 1450;
+    try {
+      do {
+        let blitOfs = walk;
+        if (dir < 0 && k > 0 && walk <= assistPos[k]) {
+          walk = assistPos[k];
+          blitOfs = walk;
+          if (!assist) {
+            s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+          }
+          syncAssist(blitOfs, SPRITE.ASSIST_STAY);
+          openAtStop(k);
+          k -= 1;
+          if (!assist) {
+            s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+          }
+          syncAssist(blitOfs, SPRITE.ASSIST_STAY);
+          if (opts?.letterSting) {
+            this.playSfx('letterCorrect');
+          }
+          await this.waitKey(dwellMs);
+          if (k === 0) {
+            dir = 1;
+          }
+        } else {
+          const nextStep = stepDelta[(i3 + 1) & 3];
+          if (dir < 0 && k > 0 && walk - nextStep <= assistPos[k]) {
+            walk = assistPos[k];
+            continue;
+          }
+          i3 = (i3 + 1) & 3;
+          walk += dir * stepDelta[i3];
+          if (dir < 0 && walk < leftEdge) {
+            walk = leftEdge;
+            // Safety: never hang on the left wing if a stop was missed.
+            if (k === 0) {
+              dir = 1;
+            }
+          }
+          if (dir > 0 && walk > rightEdge) {
+            walk = rightEdge;
+          }
+          blitOfs = walk;
+          if (!assist) {
+            s.drawSprite(stepSprite[i3], walk, 2);
+          }
+          syncAssist(blitOfs, stepSprite[i3]);
+          await this.m.audio.sound(this.random(100) + 1000, 7, { audible: true });
+        }
+        await this.delay(50);
+        if (!assist) {
+          s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
+        }
+      } while (dir < 0 || walk < rightEdge);
+    } finally {
+      assist?.sync(false, 0, SPRITE.ASSIST_STAY);
+    }
+  }
+
   /**
    * dpr:1398-1497 — open the chosen letter. `letterIdx` 0..31; `n` is the
    * 1-based word position for the ПЛЮС sector, else 0. DIFF #26: TV scoring
@@ -2143,13 +2232,15 @@ class Game {
     }
     // DIFF #23: ASSIST_STAY is 25px, cells 16px. Walk to the stand pose whose
     // midline matches the cell center (not the cell's left edge).
+    // Stops are filled left→right so assistPos[hits] is the rightmost match
+    // (opened first when she walks in from the right).
     const assistStayWidth = 25;
     const wordCellWidth = 16;
     const assistStandShift = (assistStayWidth - wordCellWidth) >> 1;
     const assistPos: number[] = new Array(20).fill(0);
     assistPos[0] = 0x19 * SCREEN_W + 639;
     let k = 0;
-    for (let j = this.guessedWord.length - 1; j >= 0; j -= 1) {
+    for (let j = 0; j < this.guessedWord.length; j += 1) {
       if (this.guessedWord[j] === letterByte) {
         k += 1;
         assistPos[k] = this.wordPos + (j << 4) - assistStandShift;
@@ -2174,67 +2265,19 @@ class Game {
     // WEB: beat after the host confirms, then the assistant leaves the wings.
     await this.delay(1000);
 
-    // Assistant walk (dpr:1456-1480). WEB: card sting after each flip.
-    const stepDelta = [3, 10, 0, 12];
-    const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
-    let i3 = 0;
-    let walk = ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X0;
+    // Assistant walk (dpr:1456-1480). WEB: enter right, open R→L, exit right; sting per flip.
     const revealed = new Set<number>();
-    const assist = this.ctx.assist;
-    const syncAssist = (ofs: number, spriteId: number): void => {
-      if (assist) {
-        assist.sync(true, ofs, spriteId);
-      }
-    };
-    try {
-    do {
-      let blitOfs = walk;
-      if (k > 0 && walk >= assistPos[k]) {
-        walk = assistPos[k];
-        blitOfs = walk;
-        if (!assist) {
-          s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-        }
-        syncAssist(blitOfs, SPRITE.ASSIST_STAY);
-        if (this.ctx.board) {
-          revealed.add(this.letterIndexAtAssist(assistPos[k]));
-          this.syncBoard(true, revealed, openBeforeWalk);
-        } else {
-          const f = BACKBUF + assistPos[k] + assistStandShift + 11 * SCREEN_W;
-          s.fillRect(f, 19, 15, 7);
-          s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
-          s.screenCopy(15, 19, f - BACKBUF, f);
-        }
-        k -= 1;
-        if (!assist) {
-          s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-        }
-        syncAssist(blitOfs, SPRITE.ASSIST_STAY);
-        this.playSfx('letterCorrect');
-        await this.waitKey(1450);
+    await this.assistantOpenWalk(assistPos, hits, (stopK) => {
+      if (this.ctx.board) {
+        revealed.add(this.letterIndexAtAssist(assistPos[stopK]));
+        this.syncBoard(true, revealed, openBeforeWalk);
       } else {
-        const nextStep = stepDelta[(i3 + 1) & 3];
-        if (k > 0 && walk + nextStep >= assistPos[k]) {
-          walk = assistPos[k];
-          continue;
-        }
-        i3 = (i3 + 1) & 3;
-        walk += stepDelta[i3];
-        blitOfs = walk;
-        if (!assist) {
-          s.drawSprite(stepSprite[i3], walk, 2);
-        }
-        syncAssist(blitOfs, stepSprite[i3]);
-        await this.m.audio.sound(this.random(100) + 1000, 7, { audible: true });
+        const f = BACKBUF + assistPos[stopK] + assistStandShift + 11 * SCREEN_W;
+        s.fillRect(f, 19, 15, 7);
+        s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
+        s.screenCopy(15, 19, f - BACKBUF, f);
       }
-      await this.delay(50);
-      if (!assist) {
-        s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
-      }
-    } while (walk < ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X1);
-    } finally {
-      assist?.sync(false, 0, SPRITE.ASSIST_STAY);
-    }
+    }, { dwellMs: 1450, letterSting: true });
 
     let k2 = 0;
     for (let i = 0x64; i >= 20; i -= 1) {
@@ -2795,8 +2838,8 @@ class Game {
   }
 
   /**
-   * Walk the assistant across the board and open every still-closed letter
-   * (same flip cadence as openLetter, without scoring or per-card sting).
+   * Walk the assistant from the right, open every still-closed letter right→left,
+   * then exit back to the right (same cadence as openLetter, no scoring/sting).
    */
   private async assistantRevealRemainingLetters(opts?: { leadInMs?: number }): Promise<void> {
     const s = this.screen;
@@ -2812,7 +2855,7 @@ class Game {
     const assistPos: number[] = new Array(20).fill(0);
     assistPos[0] = 0x19 * SCREEN_W + 639;
     let k = 0;
-    for (let j = this.guessedWord.length - 1; j >= 0; j -= 1) {
+    for (let j = 0; j < this.guessedWord.length; j += 1) {
       if (!this.opened[j]) {
         k += 1;
         assistPos[k] = this.wordPos + (j << 4) - assistStandShift;
@@ -2833,67 +2876,20 @@ class Game {
       await this.delay(leadInMs);
     }
 
-    const stepDelta = [3, 10, 0, 12];
-    const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
-    let i3 = 0;
-    let walk = ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X0;
     const revealed = new Set<number>();
-    const assist = this.ctx.assist;
-    const syncAssist = (ofs: number, spriteId: number): void => {
-      if (assist) {
-        assist.sync(true, ofs, spriteId);
+    await this.assistantOpenWalk(assistPos, k, (stopK) => {
+      const cellIdx = this.letterIndexAtAssist(assistPos[stopK]);
+      const letterChar = decodeCp866(this.guessedWord.subarray(cellIdx, cellIdx + 1));
+      if (this.ctx.board) {
+        revealed.add(cellIdx);
+        this.syncBoard(true, revealed, openBeforeWalk);
+      } else {
+        const f = BACKBUF + assistPos[stopK] + assistStandShift + 11 * SCREEN_W;
+        s.fillRect(f, 19, 15, 7);
+        s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
+        s.screenCopy(15, 19, f - BACKBUF, f);
       }
-    };
-    try {
-      do {
-        let blitOfs = walk;
-        if (k > 0 && walk >= assistPos[k]) {
-          walk = assistPos[k];
-          blitOfs = walk;
-          if (!assist) {
-            s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-          }
-          syncAssist(blitOfs, SPRITE.ASSIST_STAY);
-          const cellIdx = this.letterIndexAtAssist(assistPos[k]);
-          const letterChar = decodeCp866(this.guessedWord.subarray(cellIdx, cellIdx + 1));
-          if (this.ctx.board) {
-            revealed.add(cellIdx);
-            this.syncBoard(true, revealed, openBeforeWalk);
-          } else {
-            const f = BACKBUF + assistPos[k] + assistStandShift + 11 * SCREEN_W;
-            s.fillRect(f, 19, 15, 7);
-            s.print(letterChar, f + 4 + 2 * SCREEN_W, 0, 14, 8);
-            s.screenCopy(15, 19, f - BACKBUF, f);
-          }
-          k -= 1;
-          if (!assist) {
-            s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
-          }
-          syncAssist(blitOfs, SPRITE.ASSIST_STAY);
-          await this.waitKey(450);
-        } else {
-          const nextStep = stepDelta[(i3 + 1) & 3];
-          if (k > 0 && walk + nextStep >= assistPos[k]) {
-            walk = assistPos[k];
-            continue;
-          }
-          i3 = (i3 + 1) & 3;
-          walk += stepDelta[i3];
-          blitOfs = walk;
-          if (!assist) {
-            s.drawSprite(stepSprite[i3], walk, 2);
-          }
-          syncAssist(blitOfs, stepSprite[i3]);
-          await this.m.audio.sound(this.random(100) + 1000, 7, { audible: true });
-        }
-        await this.delay(50);
-        if (!assist) {
-          s.screenCopy(48, 90, blitOfs, BACKBUF + blitOfs);
-        }
-      } while (walk < ASSIST_WALK_Y * SCREEN_W + ASSIST_WALK_X1);
-    } finally {
-      assist?.sync(false, 0, SPRITE.ASSIST_STAY);
-    }
+    }, { dwellMs: 450 });
 
     this.syncBoard(true);
     this.paintWordBoard();

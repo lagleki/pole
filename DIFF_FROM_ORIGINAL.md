@@ -113,10 +113,10 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     stops at the cell's left-edge offset (ASSIST_STAY is 25px, cells are 16px)
     and can overshoot, so she stood a few pixels right of the card. The walk
     target is shifted left by `(25−16)/2` and the last step is clamped so she
-    arrives on that pose without jumping back after stopping. WEB also walks
-    her the full screen width (x=0→640) so she eases out from behind the left
-    side wall and exits behind the right, instead of popping in at DOS x=40 /
-    vanishing at x=582.
+    arrives on that pose without jumping back after stopping. WEB: she enters
+    from behind the right side wall (x=640), opens only the needed cards
+    right→left, then after the last needed card returns and exits to the right
+    (not across to the left), instead of the DOS pop-in at x=40 / vanish at x=582.
 24. **Pause before the host replies to a player.** After a letter, a whole-word
     guess, a prize/box choice, Yakubovich waits ~700 ms (Space/click skips)
     before speaking so the player's answer can land. Other host lines are

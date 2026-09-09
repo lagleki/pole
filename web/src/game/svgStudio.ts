@@ -2,7 +2,7 @@
  * SVG studio chrome (DIFF #19). Scenic stack (all behind canvas/HUD):
  *   1. full-width back wall (bricks + swirls + lamps)
  *   2. marble board overlay
- *   3. assistant walk (x = 0 … SCREEN_W at y = 25)
+ *   3. assistant walk (enters/exits at x = SCREEN_W, opens right→left at y = 25)
  *   4. side walls (she passes between 1/2 and these)
  * Brick kinds still follow DIFF #15 (seeded RNG, restore uses i%3).
  */
@@ -51,9 +51,9 @@ export function lampIrradiance(x: number, y: number): number {
 
 /** Assistant walk row (screen y). Full-width path so she eases past the side walls. */
 export const ASSIST_WALK_Y = 25;
-/** Left edge of the screen — she enters from behind the left side wall. */
+/** Left screen edge — safety bound while she walks left across cards. */
 export const ASSIST_WALK_X0 = 0;
-/** Past the right edge — she exits behind the right side wall (sprite is 25px). */
+/** Right screen edge — she enters and exits behind the right side wall (sprite is 25px). */
 export const ASSIST_WALK_X1 = SCREEN_W;
 /** @deprecated alias kept for older call sites; wing is no longer inset. */
 export const ASSIST_WING_X = ASSIST_WALK_X0;
