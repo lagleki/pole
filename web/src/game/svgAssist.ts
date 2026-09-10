@@ -121,11 +121,12 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
         return;
       }
       const { x, y } = assistXY(ofs);
-      const w = widths.get(spriteId) ?? 25;
-      // Mirror in place so the feet stay on the same walk offset while facing left.
+      // Pivot on ASSIST_STAY width (25), not the current frame width — move frames
+      // are 21..33px and a per-frame pivot makes leftward walks stutter.
+      const pivotW = widths.get(SPRITE.ASSIST_STAY) ?? 25;
       root.setAttribute(
         'transform',
-        faceLeft ? `translate(${x + w} ${y}) scale(-1 1)` : `translate(${x} ${y})`,
+        faceLeft ? `translate(${x + pivotW} ${y}) scale(-1 1)` : `translate(${x} ${y})`,
       );
       setSvgShown(root, true);
       host.hidden = false;

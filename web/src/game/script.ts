@@ -2122,6 +2122,7 @@ class Game {
     opts?: { dwellMs?: number; letterSting?: boolean },
   ): Promise<void> {
     const s = this.screen;
+    // Rightward gait (DOS / exit path). Leftward entry runs the same table in reverse.
     const stepDelta = [3, 10, 0, 12];
     const stepSprite = [SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE3, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3];
     let i3 = 0;
@@ -2134,7 +2135,7 @@ class Game {
     const assist = this.ctx.assist;
     const syncAssist = (ofs: number, spriteId: number): void => {
       if (assist) {
-        // Sprites face right (exit path). Mirror while walking/opening leftward.
+        // Sprites face right (exit). Mirror + reverse gait while walking left.
         assist.sync(true, ofs, spriteId, dir < 0);
       }
     };
@@ -2161,20 +2162,33 @@ class Game {
           await this.waitKey(dwellMs);
           if (k === 0) {
             dir = 1;
+            i3 = 0; // restart forward gait for the exit
           }
         } else {
-          const nextStep = stepDelta[(i3 + 1) & 3];
+          // Advance (+) or rewind (−) the 4-phase walk cycle with matching delta.
+          const nextPhase = dir > 0 ? (i3 + 1) & 3 : (i3 + 3) & 3;
+          const nextStep = stepDelta[nextPhase];
           if (dir < 0 && k > 0 && walk - nextStep <= assistPos[k]) {
             walk = assistPos[k];
             continue;
           }
-          i3 = (i3 + 1) & 3;
+          if (dir > 0 && k === 0 && walk + nextStep >= rightEdge) {
+            // Snap the last exit step onto the wing so we don't overshoot/jitter.
+            walk = rightEdge;
+            blitOfs = walk;
+            if (!assist) {
+              s.drawSprite(SPRITE.ASSIST_STAY, blitOfs, 2);
+            }
+            syncAssist(blitOfs, SPRITE.ASSIST_STAY);
+            break;
+          }
+          i3 = nextPhase;
           walk += dir * stepDelta[i3];
           if (dir < 0 && walk < leftEdge) {
             walk = leftEdge;
-            // Safety: never hang on the left wing if a stop was missed.
             if (k === 0) {
               dir = 1;
+              i3 = 0;
             }
           }
           if (dir > 0 && walk > rightEdge) {
