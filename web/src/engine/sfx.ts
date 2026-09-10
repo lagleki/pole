@@ -39,7 +39,10 @@ export const SFX_FILES = {
 
 export type SfxId = keyof typeof SFX_FILES;
 
-/** Beds and themes — gated by the Музыка button, not by Ctrl+S. */
+/**
+ * All studio music / musical beds & stings — gated by Музыка (volume 0 vs base).
+ * Ctrl+S still gates TTS + short letter/word/box effect cues only.
+ */
 export const MUSIC_SFX_IDS = [
   'opening',
   'openingOld',
@@ -50,6 +53,17 @@ export const MUSIC_SFX_IDS = [
   'super60s',
   'prizesStudio',
   'sponsor',
+  'drumSpin',
+  'sting',
+  'sectorPrize',
+  'bankrupt',
+  'sectorZero',
+  'sectorPlus',
+  'sectorX2',
+  'autoWin',
+  'automobileYell',
+  'vseVashe',
+  'winnerTour',
 ] as const satisfies readonly SfxId[];
 
 const MUSIC_SFX = new Set<SfxId>(MUSIC_SFX_IDS);

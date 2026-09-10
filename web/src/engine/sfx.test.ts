@@ -24,12 +24,16 @@ describe('players-enter bed', () => {
 });
 
 describe('music vs sfx', () => {
-  it('treats studio beds as music and letter/drum cues as effects', () => {
+  it('gates beds, drum, and musical stings by Музыка; letter/box cues stay effects', () => {
     expect(isMusicSfx('playersEnter')).toBe(true);
     expect(isMusicSfx('opening')).toBe(true);
     expect(isMusicSfx('super60s')).toBe(true);
-    expect(isMusicSfx('drumSpin')).toBe(false);
+    expect(isMusicSfx('drumSpin')).toBe(true);
+    expect(isMusicSfx('sting')).toBe(true);
+    expect(isMusicSfx('bankrupt')).toBe(true);
     expect(isMusicSfx('letterCorrect')).toBe(false);
+    expect(isMusicSfx('wordWrong')).toBe(false);
+    expect(isMusicSfx('boxMoney')).toBe(false);
   });
 });
 
