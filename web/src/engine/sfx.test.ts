@@ -24,16 +24,19 @@ describe('players-enter bed', () => {
 });
 
 describe('music vs sfx', () => {
-  it('gates beds, drum, and musical stings by Музыка; letter/box cues stay effects', () => {
+  it('gates beds, drum, sector/letter/word/box cues by Музыка', () => {
     expect(isMusicSfx('playersEnter')).toBe(true);
     expect(isMusicSfx('opening')).toBe(true);
     expect(isMusicSfx('super60s')).toBe(true);
     expect(isMusicSfx('drumSpin')).toBe(true);
     expect(isMusicSfx('sting')).toBe(true);
     expect(isMusicSfx('bankrupt')).toBe(true);
-    expect(isMusicSfx('letterCorrect')).toBe(false);
-    expect(isMusicSfx('wordWrong')).toBe(false);
-    expect(isMusicSfx('boxMoney')).toBe(false);
+    expect(isMusicSfx('sectorPlus')).toBe(true);
+    expect(isMusicSfx('letterCorrect')).toBe(true);
+    expect(isMusicSfx('letterWrong')).toBe(true);
+    expect(isMusicSfx('wordWrong')).toBe(true);
+    expect(isMusicSfx('boxMoney')).toBe(true);
+    expect(isMusicSfx('boxEmpty')).toBe(true);
   });
 });
 

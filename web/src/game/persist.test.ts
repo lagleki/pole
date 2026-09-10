@@ -67,6 +67,7 @@ describe('svg wheel', () => {
     expect(WHEEL_SECTORS.some((s) => s.kind === 'prize')).toBe(true);
     const svg = buildWheelSvg();
     expect(svg).toContain('id="wheel-rot"');
+    expect(svg).toContain('id="wheel-barrel"');
     expect(svg).toContain('>П</text>');
     expect(svg).toContain('>Б</text>');
     expect(svg).toContain('>1000</text>');
@@ -74,9 +75,13 @@ describe('svg wheel', () => {
     expect(svg).not.toContain('ПРИЗ');
     expect(svgWheelLayout.box).toEqual({ x: 128, y: 154, width: 223, height: 172 });
     expect(svgWheelLayout.center.x).toBe(128 + 223 / 2 + DRUM_NUDGE_X);
-    expect(svgWheelLayout.center.y).toBe(354);
+    // Top-lid hub (vertical cylinder); mantle extends down to the floor.
+    expect(svgWheelLayout.center.y).toBe(220);
     expect(svgWheelLayout.radii.x).toBeGreaterThan(120);
-    expect(svgWheelLayout.radii.x).toBe(svgWheelLayout.radii.y);
+    expect(svgWheelLayout.radii.y).toBeLessThan(svgWheelLayout.radii.x);
+    expect(svgWheelLayout.radii.y).toBeCloseTo(svgWheelLayout.radii.x * svgWheelLayout.faceSy);
+    expect(svgWheelLayout.depth).toBeGreaterThan(20);
+    expect(svgWheelLayout.botCenter.y).toBe(svgWheelLayout.center.y + svgWheelLayout.depth);
     expect(svg).not.toContain('id="wheel-letter-clip"');
     expect(svg).toContain('viewBox="0 0 640 350"');
     expect(svgWheelLayout.halfStepDeg).toBe(10);
@@ -118,27 +123,29 @@ describe('svg wheel', () => {
     expect(edge.left.x + edge.left.w).toBeLessThanOrEqual(edge.right.x);
   });
 
-  it('punches a circular hole for the full disk and keeps the hand', () => {
+  it('punches an elliptical hole for the top lid and keeps the hand', () => {
     const rgba = new Uint8ClampedArray(640 * 350 * 4);
     rgba.fill(255);
+    const hub = svgWheelLayout.center;
+    const handY = Math.floor(hub.y);
+    const handX = Math.floor(hub.x) - 1;
     const keep = {
-      ofs: 0x13a * 640 + 240,
+      ofs: handY * 640 + handX,
       width: 2,
       height: 2,
       pixels: new Uint8Array([1, 2, 1, 1]),
       transparent: 2,
     };
     punchWheelHole(rgba, keep);
-    const hub = svgWheelLayout.center;
     const punchedY = Math.min(VISIBLE_H - 1, Math.floor(hub.y));
     const hubI = (punchedY * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[hubI]).toBe(0);
-    const handOpaque = (0x13a * 640 + 240) * 4;
+    const handOpaque = (handY * 640 + handX) * 4;
     expect(rgba[handOpaque]).toBe(0);
     expect(rgba[handOpaque + 1]).toBe(0);
     expect(rgba[handOpaque + 2]).toBe(0xaa);
     expect(rgba[handOpaque + 3]).toBe(255);
-    const handTransparent = (0x13a * 640 + 241) * 4 + 3;
+    const handTransparent = (handY * 640 + handX + 1) * 4 + 3;
     expect(rgba[handTransparent]).toBe(0);
     const outsideDisk = ((Math.floor(hub.y) - Math.ceil(svgWheelLayout.radii.y) - 4) * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[outsideDisk]).toBe(255);

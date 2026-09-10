@@ -40,8 +40,8 @@ export const SFX_FILES = {
 export type SfxId = keyof typeof SFX_FILES;
 
 /**
- * All studio music / musical beds & stings — gated by Музыка (volume 0 vs base).
- * Ctrl+S still gates TTS + short letter/word/box effect cues only.
+ * All gameplay SFX beds, stings, sector jingles, letter/word/box cues — gated by
+ * Музыка (volume 0 vs base). Ctrl+S still gates host TTS only.
  */
 export const MUSIC_SFX_IDS = [
   'opening',
@@ -64,6 +64,13 @@ export const MUSIC_SFX_IDS = [
   'automobileYell',
   'vseVashe',
   'winnerTour',
+  'letterCorrect',
+  'letterWrong',
+  'wordCorrect',
+  'wordWrong',
+  'wordWrongSuper',
+  'boxEmpty',
+  'boxMoney',
 ] as const satisfies readonly SfxId[];
 
 const MUSIC_SFX = new Set<SfxId>(MUSIC_SFX_IDS);

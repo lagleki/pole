@@ -43,8 +43,8 @@ export function playerXY(ofs: number): { x: number; y: number } {
 
 function drumClipPath(): string {
   const { x: cx, y: cy } = svgWheelLayout.center;
-  const r = svgWheelLayout.holeR;
-  return `M0,0h640v350h-640Z M${cx},${cy} m ${-r},0 a ${r},${r} 0 1,1 ${2 * r},0 a ${r},${r} 0 1,1 ${-2 * r},0`;
+  const { x: rx, y: ry } = svgWheelLayout.holeRadii;
+  return `M0,0h640v350h-640Z M${cx},${cy} m ${-rx},0 a ${rx},${ry} 0 1,1 ${2 * rx},0 a ${rx},${ry} 0 1,1 ${-2 * rx},0`;
 }
 
 export function buildPlayersSvg(): string {
