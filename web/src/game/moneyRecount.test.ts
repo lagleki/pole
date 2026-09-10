@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { moneyRecountStride } from './script';
+import { moneyRecountStride } from './moneyRecount';
 
 function recountMs(score: number): number {
   const stride = moneyRecountStride(score);

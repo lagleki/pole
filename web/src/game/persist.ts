@@ -9,14 +9,14 @@ export const PREFS_STORAGE_KEY = 'pole-chudes-2:prefs';
 export const PROGRESS_VERSION = 1 as const;
 
 export interface SeatSave {
-  spriteId: number | null;
-  nameBytes: number[];
-  score: number;
+  readonly spriteId: number | null;
+  readonly nameBytes: number[];
+  readonly score: number;
 }
 
 export interface CharacterSave {
-  spriteId: number;
-  name: string;
+  readonly spriteId: number;
+  readonly name: string;
 }
 
 export interface GameProgressSave {

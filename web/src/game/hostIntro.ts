@@ -14,6 +14,9 @@ const WEEKDAYS_RU = [
   'Суббота',
 ] as const;
 
+/** STAGE_NAMES index for the tournament final. */
+const FINAL_STAGE_INDEX = 6;
+
 export function broadcastWeekday(now = new Date()): string {
   return WEEKDAYS_RU[now.getDay()];
 }
@@ -32,14 +35,14 @@ export function firstTourInvite(): string {
 
 /** Later tours: shorter re-open, then a new triple. */
 export function laterTourGreeting(stage: number): string {
-  if (stage === 6) {
+  if (stage === FINAL_STAGE_INDEX) {
     return 'Финал! В эфире капитал-шоу Поле чудес!';
   }
   return 'И вновь в эфире капитал-шоу Поле чудес!';
 }
 
 export function laterTourInvite(stage: number): string {
-  if (stage === 6) {
+  if (stage === FINAL_STAGE_INDEX) {
     return 'Приглашаю в студию финальную тройку игроков!';
   }
   return 'Приглашаю в студию новую тройку игроков!';

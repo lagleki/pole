@@ -18,7 +18,7 @@ export interface HandView {
 export const HAND_W = 14;
 export const HAND_H = 24;
 
-export function handXY(ofs: number): { x: number; y: number } {
+export function handXY(ofs: number): { readonly x: number; readonly y: number } {
   return { x: ofs % SCREEN_W, y: Math.floor(ofs / SCREEN_W) };
 }
 
@@ -54,11 +54,15 @@ export function mountSvgHand(host: HTMLElement): HandView {
     throw new Error('SVG hand mount failed');
   }
 
+  const hide = (): void => {
+    setSvgShown(root, false);
+    host.hidden = true;
+  };
+
   return {
     sync(active: boolean, ofs: number): void {
       if (!active) {
-        setSvgShown(root, false);
-        host.hidden = true;
+        hide();
         return;
       }
       const { x, y } = handXY(ofs);
@@ -68,8 +72,7 @@ export function mountSvgHand(host: HTMLElement): HandView {
     },
     setVisible(visible: boolean): void {
       if (!visible) {
-        setSvgShown(root, false);
-        host.hidden = true;
+        hide();
       }
     },
   };

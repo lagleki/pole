@@ -10,9 +10,9 @@ import { indexedSpriteToSvg, setSvgShown } from './svgAssist';
 export type BoxKind = 'closed' | 'opened' | 'money';
 
 export interface BoxSprite {
-  kind: BoxKind;
-  x: number;
-  y: number;
+  readonly kind: BoxKind;
+  readonly x: number;
+  readonly y: number;
 }
 
 export interface BoxesView {

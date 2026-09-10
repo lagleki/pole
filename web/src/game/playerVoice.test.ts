@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { defaultAssetSpec } from '../spec';
-import { playerVoiceRole } from './script';
+import { playerVoiceRole } from './playerVoice';
 
 const spriteIds = defaultAssetSpec.spriteIds;
 

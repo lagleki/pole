@@ -17,11 +17,20 @@ export interface AssistView {
   setVisible(visible: boolean): void;
 }
 
+/** Palette index treated as transparent in ASSIST_* sprites. */
 export const ASSIST_TRANSPARENT = 2;
-const SPRITE = defaultAssetSpec.spriteIds;
-const ASSIST_IDS = [SPRITE.ASSIST_STAY, SPRITE.ASSIST_MOVE1, SPRITE.ASSIST_MOVE2, SPRITE.ASSIST_MOVE3] as const;
+/** EGA nibble mask when reading indexed sprite pixels. */
+const EGA_INDEX_MASK = 0x0f;
 
-export function assistXY(ofs: number): { x: number; y: number } {
+const SPRITE = defaultAssetSpec.spriteIds;
+const ASSIST_IDS = [
+  SPRITE.ASSIST_STAY,
+  SPRITE.ASSIST_MOVE1,
+  SPRITE.ASSIST_MOVE2,
+  SPRITE.ASSIST_MOVE3,
+] as const;
+
+export function assistXY(ofs: number): { readonly x: number; readonly y: number } {
   return { x: ofs % SCREEN_W, y: Math.floor(ofs / SCREEN_W) };
 }
 
@@ -41,7 +50,7 @@ export function indexedSpriteToSvg(
   for (let y = 0; y < height; y += 1) {
     let x = 0;
     while (x < width) {
-      const value = pixels[y * width + x];
+      const value = pixels[y * width + x]!;
       if (value === transparent) {
         x += 1;
         continue;
@@ -50,7 +59,7 @@ export function indexedSpriteToSvg(
       while (x1 < width && pixels[y * width + x1] === value) {
         x1 += 1;
       }
-      const color = palette[value & 0x0f];
+      const color = palette[value & EGA_INDEX_MASK];
       if (color) {
         rects.push(
           `<rect x="${x}" y="${y}" width="${x1 - x}" height="1" fill="${egaHex(color)}"/>`,
@@ -67,11 +76,7 @@ export function indexedSpriteToSvg(
  * presentation attribute so only one animation frame is visible.
  */
 export function setSvgShown(el: Element, shown: boolean): void {
-  if (shown) {
-    el.setAttribute('display', 'inline');
-  } else {
-    el.setAttribute('display', 'none');
-  }
+  el.setAttribute('display', shown ? 'inline' : 'none');
 }
 
 function buildAssistSvg(): string {
@@ -92,8 +97,12 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
     throw new Error('SVG assistant mount failed');
   }
   const frames = [...host.querySelectorAll<SVGGElement>('.assist-frame')];
-
   const widths = new Map<number, number>();
+
+  const hide = (): void => {
+    setSvgShown(root, false);
+    host.hidden = true;
+  };
 
   return {
     loadSprites(sprites, palette): void {
@@ -116,14 +125,13 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
     },
     sync(active, ofs, spriteId, faceLeft = false): void {
       if (!active) {
-        setSvgShown(root, false);
-        host.hidden = true;
+        hide();
         return;
       }
       const { x, y } = assistXY(ofs);
       // Pivot on ASSIST_STAY width (25), not the current frame width — move frames
       // are 21..33px and a per-frame pivot makes leftward walks stutter.
-      const pivotW = widths.get(SPRITE.ASSIST_STAY) ?? 25;
+      const pivotW = widths.get(SPRITE.ASSIST_STAY) ?? 25; // ASSIST_STAY_WIDTH
       root.setAttribute(
         'transform',
         faceLeft ? `translate(${x + pivotW} ${y}) scale(-1 1)` : `translate(${x} ${y})`,
@@ -137,8 +145,7 @@ export function mountSvgAssist(host: HTMLElement): AssistView {
     },
     setVisible(visible: boolean): void {
       if (!visible) {
-        setSvgShown(root, false);
-        host.hidden = true;
+        hide();
       }
     },
   };

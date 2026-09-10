@@ -10,12 +10,12 @@ export const TV_POINT_VALUES = [
 ] as const;
 
 export type TvSector =
-  | { kind: 'points'; value: number }
-  | { kind: 'bankrupt' }
-  | { kind: 'prize' }
-  | { kind: 'plus' }
-  | { kind: 'x2' }
-  | { kind: 'zero' };
+  | { readonly kind: 'points'; readonly value: number }
+  | { readonly kind: 'bankrupt' }
+  | { readonly kind: 'prize' }
+  | { readonly kind: 'plus' }
+  | { readonly kind: 'x2' }
+  | { readonly kind: 'zero' };
 
 const P = (value: number): TvSector => ({ kind: 'points', value });
 

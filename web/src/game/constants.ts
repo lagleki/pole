@@ -8,8 +8,8 @@ import { defaultAssetSpec } from '../spec';
 const spriteIds = defaultAssetSpec.spriteIds;
 
 export interface CharacterSpec {
-  spriteId: number;
-  name: string;
+  readonly spriteId: number;
+  readonly name: string;
 }
 
 /**
@@ -37,15 +37,15 @@ export const FEMALE_CHARACTER_SPRITES: ReadonlySet<number> = new Set([
 
 export interface SeatSpec {
   /** Players[n].Sprite.ofs — character sprite anchor (dpr:138-140). */
-  spriteOfs: number;
+  readonly spriteOfs: number;
   /** TalkBubbleOfs = Sprite.ofs - 17888 (dpr:138-140). */
-  talkBubbleOfs: number;
+  readonly talkBubbleOfs: number;
   /** LabelOfs — caption/name print anchor (dpr:138-140). */
-  labelOfs: number;
+  readonly labelOfs: number;
   /** MoneyOfs — money-stack anchor (dpr:138-140). */
-  moneyOfs: number;
+  readonly moneyOfs: number;
   /** Seat caption string (dpr:138-140). */
-  caption: string;
+  readonly caption: string;
 }
 
 /** The 3 player seats, exactly as initialized in the Players array (dpr:138-140). */
