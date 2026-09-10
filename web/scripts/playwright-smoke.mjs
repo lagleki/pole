@@ -334,26 +334,21 @@ async function driveGame(page) {
     }
     prevTextEntry = false;
 
-    // ---- human letter pick (alphabet row step=20, ПЛЮС positions step=16)
+    // ---- human letter pick (full-screen pad) + ПЛЮС positions (hand step=16)
     if (g.scene === 'letter-pick' && humanTurn) {
       const hand = snap.hand;
-      if (hand && (hand.step === 20 || hand.step === 16)) {
-        if (letterBaseline === null) {
-          letterBaseline = g.usedLetters.length;
-        }
-        let letter = null;
-        if (hand.step === 20) {
-          letter = alphabetLetter(Math.round((hand.ofs - hand.min) / 20));
-        } else {
-          const n = (hand.ofs - hand.min + 16) >> 4;
-          letter = g.word[n - 1] ?? null;
-        }
+      if (letterBaseline === null) {
+        letterBaseline = g.usedLetters.length;
+      }
+      const base = letterBaseline;
+      // ПЛЮС: still hand-on-board
+      if (hand && hand.step === 16) {
+        const n = (hand.ofs - hand.min + 16) >> 4;
+        const letter = g.word[n - 1] ?? null;
         counters.letterPickActions += 1;
         if (letter !== null && g.usedLetters.includes(letter)) {
-          // Would buzz: step the hand to the next cell instead.
           await pressKey(page, hand.ofs >= hand.max ? 'ArrowLeft' : 'ArrowRight', 10);
         } else {
-          const base = letterBaseline;
           await pressKey(page, ' ');
           await waitForState(
             page,
@@ -361,8 +356,20 @@ async function driveGame(page) {
             2500,
           );
         }
+        await delay(POLL_MS);
+        continue;
       }
-      // Never generic-press while the human pick cursor is live.
+      // Alphabet pad: click first enabled tile (or type А–Я via injectKey).
+      const padVisible = await page.locator('#letter-pad-overlay:not([hidden]) .letter-pad-tile:not(:disabled)').count();
+      if (padVisible > 0) {
+        counters.letterPickActions += 1;
+        await page.locator('#letter-pad-overlay:not([hidden]) .letter-pad-tile:not(:disabled)').first().click({ force: true });
+        await waitForState(
+          page,
+          (s) => s.game?.scene !== 'letter-pick' || (s.game?.usedLetters.length ?? 0) > base,
+          2500,
+        );
+      }
       await delay(POLL_MS);
       continue;
     }

@@ -3,10 +3,10 @@
  * word solve, prize ceremony, seat pass (dpr:1120-1514 + DIFF #26/#30).
  */
 import { decodeCp866 } from '../encoding/cp866';
-import { BACKBUF, INFINITE, SCREEN_W, type Machine, type ScreenApi } from '../engine/types';
+import { INFINITE, SCREEN_W, type Machine, type ScreenApi } from '../engine/types';
 import type { SfxId, SfxPlayOptions } from '../engine/sfx';
-import { defaultAssetSpec } from '../spec';
 import { liveSeat, MONEY_VALUES, PRIZES } from './constants';
+import { PRIZE_LAYOUT } from './svgCeremony';
 import type { GameContext, GameSeat, Scene } from './gameTypes';
 import type { GameProgressSave } from './persist';
 import {
@@ -17,36 +17,25 @@ import {
 } from './letterAward';
 import { letterReplica } from './playerVoice';
 import {
-  ASSIST_STAND_SHIFT,
   WORD_CELL_WIDTH,
+  applyAssistStopsOpened,
   collectClosedCellStops,
-  collectLetterHits,
+  collectLetterHitStops,
+  type AssistStop,
   type AssistantWalkOptions,
 } from './assistantWalk';
+import { openedIndexSet } from './boardLetters';
 import {
   applyLetterScore,
-  firstAvailableLetter,
-  nearestAvailableLetter,
   npcPickLetterIndex,
 } from './roundWord';
 import { boxBringIn, boxClosedPair, boxReveal } from './svgBoxes';
+import { animateFrames } from './tween';
 import { WHEEL_SECTORS } from './tvWheel';
 import type { BoardWordCell } from './svgBoard';
 
-const SPRITE = defaultAssetSpec.spriteIds;
-
-/** Alphabet strip row (dpr / DIFF #19). */
-const ALPHA_ROW_Y = 0x14c;
-const ALPHA_CELL_W = 20;
-const ALPHA_CELL_H = 18;
 const ALPHA_USED = 0x20;
 const CP866_A = 0x80;
-const FONT_HALF_PX = 4;
-const OPEN_LETTER_INK_DY = 11;
-const OPEN_LETTER_GLYPH_DX = 4;
-const OPEN_LETTER_GLYPH_DY = 2;
-const OPEN_LETTER_FILL_W = 19;
-const OPEN_LETTER_FILL_H = 15;
 const OPEN_LETTER_DWELL_MS = 1450;
 const REVEAL_REMAINING_DWELL_MS = 450;
 const HOST_CONFIRM_BEAT_MS = 1000;
@@ -71,6 +60,7 @@ export interface PlayerTurnHost {
   supergameActive: boolean;
   resumeAfterSpin: boolean;
   resumeAtLetterPick: { awardKind: AwardKind; awardUnit: number } | null;
+  resumeAtBoxChosen: { choice: number; winning: number } | null;
   resumeAtLetterOpen: {
     awardKind: AwardKind;
     awardUnit: number;
@@ -78,7 +68,11 @@ export interface PlayerTurnHost {
     plusPosition: number;
   } | null;
   setScene(scene: Scene): void;
-  persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: LetterAward, pick?: { letterIdx: number; plusPosition?: number }): void;
+  persistCheckpoint(
+    checkpoint: GameProgressSave['checkpoint'],
+    award?: LetterAward,
+    pick?: { letterIdx?: number; plusPosition?: number; boxChoice?: number; boxWinning?: number },
+  ): void;
   isHuman(seatIdx: number): boolean;
   playerName(seatIdx: number): string;
   useSvgPlayers(): boolean;
@@ -87,17 +81,15 @@ export interface PlayerTurnHost {
   paintWordBoard(): void;
   drawFortuneWheel(a: number): void;
   hideWheel(): void;
-  syncBoard(visible?: boolean, revealedDuringWalk?: Set<number>, openBeforeWalk?: Set<number>): void;
+  syncBoard(visible?: boolean, revealedDuringWalk?: ReadonlySet<number>, openBeforeWalk?: ReadonlySet<number>): void;
   syncDebug(): void;
-  wordBoardCells(entryBytes?: Uint8Array, revealedDuringWalk?: Set<number>, openBeforeWalk?: Set<number>): BoardWordCell[];
-  letterIndexAtAssist(assistOfs: number): number;
+  wordBoardCells(entryBytes?: Uint8Array, revealedDuringWalk?: ReadonlySet<number>, openBeforeWalk?: ReadonlySet<number>): BoardWordCell[];
   snapshotRoundToBackbuf(): void;
   inSupergameSolve(): boolean;
   spinWheel(): Promise<void>;
   assistantOpenWalk(
-    assistPos: readonly number[],
-    hits: number,
-    openAtStop: (stopK: number) => void,
+    stops: readonly AssistStop[],
+    openAtStop: (stop: AssistStop) => void,
     opts?: AssistantWalkOptions,
   ): Promise<void>;
   playSfx(id: SfxId, options?: SfxPlayOptions): void;
@@ -114,50 +106,27 @@ export interface PlayerTurnHost {
 }
 
 
-/** Canvas path: paint a revealed letter under the assistant stand pose. */
-function paintCanvasOpenedLetter(
-  s: ScreenApi,
-  stopOfs: number,
-  letterChar: string,
-): void {
-  const f = BACKBUF + stopOfs + ASSIST_STAND_SHIFT + OPEN_LETTER_INK_DY * SCREEN_W;
-  s.fillRect(f, OPEN_LETTER_FILL_W, OPEN_LETTER_FILL_H, 7);
-  s.print(letterChar, f + OPEN_LETTER_GLYPH_DX + OPEN_LETTER_GLYPH_DY * SCREEN_W, 0, 14, 8);
-  s.screenCopy(OPEN_LETTER_FILL_H, OPEN_LETTER_FILL_W, f - BACKBUF, f);
+function collectOpenedBeforeWalk(opened: readonly boolean[]): ReadonlySet<number> {
+  return openedIndexSet(opened);
 }
 
-function collectOpenedBeforeWalk(opened: readonly boolean[]): Set<number> {
-  const openBeforeWalk = new Set<number>();
-  for (let j = 0; j < opened.length; j += 1) {
-    if (opened[j]) {
-      openBeforeWalk.add(j);
-    }
-  }
-  return openBeforeWalk;
-}
-
-/** Blank a used alphabet tile cell. */
+/** Blank a used alphabet tile cell (SVG alphabet required). */
 export function clearAlphabetCell(host: PlayerTurnHost, letterIdx: number): void {
-  if (host.ctx.alphabet) {
-    host.ctx.alphabet.setVanishFrame(letterIdx, 3);
-    return;
+  const alphabet = host.ctx.alphabet;
+  if (!alphabet) {
+    throw new Error('alphabet view required (SVG scene graph)');
   }
-  host.screen.fillRect(ALPHA_ROW_Y * SCREEN_W + letterIdx * ALPHA_CELL_W, ALPHA_CELL_H, 19, 7);
+  alphabet.setVanishFrame(letterIdx, 3);
 }
 
-/** dpr:1410-1424 — lift the used letter off the alphabet row. */
+/** dpr:1410-1424 — lift the used letter off the alphabet row (WEB: SVG vanish frames). */
 export async function vanishAlphabetTile(host: PlayerTurnHost, letterIdx: number): Promise<void> {
-  const s = host.screen;
-  const cell = ALPHA_ROW_Y * SCREEN_W + letterIdx * ALPHA_CELL_W;
-  const svg = host.ctx.alphabet;
+  const alphabet = host.ctx.alphabet;
+  if (!alphabet) {
+    throw new Error('alphabet view required (SVG scene graph)');
+  }
   for (let i = 0; i <= 3; i += 1) {
-    if (svg) {
-      svg.setVanishFrame(letterIdx, i);
-    } else if (i < 3) {
-      s.drawSprite(SPRITE.LETTER_BACK1 + i, cell, 16);
-    } else {
-      s.fillRect(cell, ALPHA_CELL_H, 19, 7);
-    }
+    alphabet.setVanishFrame(letterIdx, i);
     let k = 0;
     for (let j = 1; j <= 10; j += 1) {
       k = host.m.audio.pwm(host.audioBuf, k, i * 100 + j * 10 + 50, 1);
@@ -167,143 +136,115 @@ export async function vanishAlphabetTile(host: PlayerTurnHost, letterIdx: number
   }
 }
 
-/** dpr:1125-1189. DOS: offered to human seats only (deviation #5). */
+/** dpr:1125-1189. DOS: offered to human seats only (deviation #5).
+ * WEB: BoxesView scene poses + animateFrames — canvas blit choreography deleted.
+ */
 export async function boxGame(host: PlayerTurnHost): Promise<void> {
   host.setScene('box-game');
-  const s = host.screen;
-  const seat = host.seats[host.curPlayer];
   const { talkBubbleOfs } = liveSeat(host.curPlayer);
-  const areaOfs = talkBubbleOfs - 60 * SCREEN_W - 32;
-
-  await host.yakubovichTalk('Три правильно угаданные буквы дают вам право на две шкатулки. Две шкатулки в студию!');
   const boxes = host.ctx.boxes;
   if (!boxes) {
-    s.screenCopy(104, 121, BACKBUF + areaOfs, areaOfs);
+    throw new Error('boxes view required (SVG scene graph)');
   }
 
-  let k = 61;
-  let j = talkBubbleOfs + 60 * SCREEN_W;
-  for (let i = 30; i >= 0; i -= 1) {
-    await host.m.audio.sound(1000 - i * 20, 10, { audible: true });
-    if (boxes) {
-      boxes.show(boxBringIn(talkBubbleOfs, 30 - i));
-    } else {
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-      s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W - 32, 7);
-      s.drawSprite(SPRITE.BOX_OPENED, j - 46 * SCREEN_W + 24, 7);
-      s.drawSprite(SPRITE.BOX_MONEY, j - 60 * SCREEN_W + 26, 7);
-      s.screenCopy(104, k, talkBubbleOfs - 32, BACKBUF + talkBubbleOfs - 32);
-      k -= 2;
-      j -= 1280;
-    }
-    await host.delay(i);
-  }
+  await host.yakubovichTalk('Три правильно угаданные буквы дают вам право на две шкатулки. Две шкатулки в студию!');
+
+  // Bring-in: frame 0..30 with DOS delay schedule delay(30-frame) + rising pitch.
+  await animateFrames({
+    frameCount: 31,
+    delayMs: (frame) => 30 - frame,
+    onFrame: async (frame) => {
+      const i = 30 - frame;
+      await host.m.audio.sound(1000 - i * 20, 10, { audible: true });
+      boxes.show(boxBringIn(talkBubbleOfs, frame));
+    },
+    delay: (ms) => host.delay(ms),
+  });
   await host.waitKey(5000);
 
-  if (!boxes) {
-    s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-  }
   await host.m.audio.sound(1000, 10, { audible: true });
-  if (boxes) {
-    boxes.show(boxClosedPair(talkBubbleOfs, false).slice(0, 1));
-  } else {
-    s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
-  }
+  boxes.show(boxClosedPair(talkBubbleOfs, false).slice(0, 1));
   await host.m.audio.sound(100, 10, { audible: true });
-  if (boxes) {
-    boxes.show(boxClosedPair(talkBubbleOfs, false));
-  } else {
-    s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
-  }
+  boxes.show(boxClosedPair(talkBubbleOfs, false));
   await host.m.audio.sound(500, 10, { audible: true });
   await host.waitKey(2000);
 
-  k = host.random(20) + 10;
+  let k = host.random(20) + 10;
   for (let i = k; i >= 0; i -= 1) {
     await host.m.audio.sound(host.random(100) + 50, 10, { audible: true });
     await host.delay(50);
-    if (boxes) {
-      boxes.show(boxClosedPair(talkBubbleOfs, (i & 1) !== 0));
-    } else {
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-      if ((i & 1) === 0) {
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W - 32, 7);
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 41 * SCREEN_W + 24, 7);
-      } else {
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 36 * SCREEN_W - 6, 7);
-        s.drawSprite(SPRITE.BOX_CLOSED, talkBubbleOfs - 46 * SCREEN_W + 4, 7);
-      }
-    }
+    boxes.show(boxClosedPair(talkBubbleOfs, (i & 1) !== 0));
   }
   await host.yakubovichSetSilent();
   await host.yakubovichTalk('Какую вам шкатулку? Левую-правую, правую-левую?');
-  const choice = await host.playerDecision('', '', 'Левая', 'Правая');
+  const humanSeat = host.isHuman(host.curPlayer);
+  const choice = await host.playerDecision(
+    '',
+    '',
+    'Левая',
+    'Правая',
+    humanSeat ? undefined : host.random(2),
+  );
   await host.yakubovichSetSilent();
   k &= 1;
-  if (boxes) {
-    boxes.show(boxReveal(talkBubbleOfs, k === 1));
-  } else {
-    s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-    s.drawSprite(SPRITE.BOX_OPENED, talkBubbleOfs - 46 * SCREEN_W - 32, 7);
-    s.drawSprite(SPRITE.BOX_OPENED, talkBubbleOfs - 46 * SCREEN_W + 24, 7);
-    s.drawSprite(SPRITE.BOX_MONEY, talkBubbleOfs - 60 * SCREEN_W - 30 + 56 * k, 7);
+  // Anti-cheat: commit choice + shuffled winner before reveal.
+  host.persistCheckpoint('box-chosen', undefined, { boxChoice: choice, boxWinning: k });
+  await resolveBoxReveal(host, choice, k);
+}
+
+/** Reveal + payout after left/right is committed (also used on resume). */
+export async function resolveBoxReveal(
+  host: PlayerTurnHost,
+  choice: number,
+  winning: number,
+): Promise<void> {
+  const seat = host.seats[host.curPlayer];
+  const { talkBubbleOfs } = liveSeat(host.curPlayer);
+  const boxes = host.ctx.boxes;
+  if (!boxes) {
+    throw new Error('boxes view required (SVG scene graph)');
   }
-  if (choice === k) {
+  boxes.show(boxReveal(talkBubbleOfs, winning === 1));
+  if (choice === winning) {
     host.playSfx('boxMoney');
-  await host.yakubovichReply('Браво!!! Вы отгадали!');
+    await host.yakubovichReply('Браво!!! Вы отгадали!');
     const before = seat.score;
     // DIFF #29: TV-scale purse; DOS awarded 100.
     seat.score += 1000;
     await host.yakubovichSetSilent();
-    if (boxes) {
-      boxes.setVisible(false);
-    } else {
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-    }
+    boxes.setVisible(false);
     await host.updateMoney(host.curPlayer, before);
   } else {
     host.playSfx('boxEmpty');
     await host.yakubovichReply('Увы! Эта шкатулка пуста!');
     await host.yakubovichSetSilent();
-    if (boxes) {
-      boxes.setVisible(false);
-    } else {
-      s.screenCopy(104, 121, areaOfs, BACKBUF + areaOfs);
-    }
+    boxes.setVisible(false);
     await host.updateMoney(host.curPlayer, seat.score);
   }
   host.movesForBox = 0;
+  // Clear box checkpoint so a later reload does not re-payout.
+  host.persistCheckpoint('in-round');
 }
 
 /** dpr:1196-1224. Returns 'won' | 'removed'. */
 export async function tellWord(host: PlayerTurnHost): Promise<'won' | 'removed'> {
   host.setScene('word-solve');
-  const s = host.screen;
   const { input } = host.m;
 
   const maxLen = host.guessedWord.length;
   const entry = input.beginTextEntry(maxLen, host.wordPos + 13 * SCREEN_W + 4, 16);
-  const k = maxLen * WORD_CELL_WIDTH;
   const board = host.ctx.board;
-  if (board) {
-    const pollEntry = window.setInterval(() => {
-      board.setWordBoard(host.wordPos, host.wordBoardCells(new Uint8Array(entry.bytes)));
-    }, 50);
-    board.setWordBoard(host.wordPos, host.wordBoardCells(new Uint8Array(entry.bytes)));
-    await input.waitEnter(INFINITE);
-    window.clearInterval(pollEntry);
-    input.endTextEntry();
-    board.setWordBoard(host.wordPos, host.wordBoardCells());
-  } else {
-    s.screenCopy(k, 31, BACKBUF + host.wordPos, host.wordPos);
-    let j = entry.ofs - 2 * SCREEN_W - 4;
-    for (let i = maxLen; i >= 1; i -= 1) {
-      s.fillRect(j, 19, 14, 7);
-      j += 16;
-    }
-    await input.waitEnter(INFINITE);
-    input.endTextEntry();
+  if (!board) {
+    throw new Error('board view required (SVG scene graph)');
   }
+  const pollEntry = globalThis.setInterval(() => {
+    board.setWordBoard(host.wordPos, host.wordBoardCells(new Uint8Array(entry.bytes)));
+  }, 50);
+  board.setWordBoard(host.wordPos, host.wordBoardCells(new Uint8Array(entry.bytes)));
+  await input.waitEnter(INFINITE);
+  globalThis.clearInterval(pollEntry);
+  input.endTextEntry();
+  board.setWordBoard(host.wordPos, host.wordBoardCells());
 
   const typed = new Uint8Array(entry.bytes);
   const match = typed.length === host.guessedWord.length
@@ -311,9 +252,6 @@ export async function tellWord(host: PlayerTurnHost): Promise<'won' | 'removed'>
   if (match) {
     await concludeCorrectWordGuess(host);
     return 'won';
-  }
-  if (!host.ctx.board) {
-    s.screenCopy(k, 31, host.wordPos, BACKBUF + host.wordPos);
   }
   host.paintWordBoard();
   host.playSfx(host.inSupergameSolve() ? 'wordWrongSuper' : 'wordWrong');
@@ -339,20 +277,11 @@ export async function concludeCorrectWordGuess(host: PlayerTurnHost): Promise<vo
 
 /** dpr:1352-1358 */
 export function removePlayer(host: PlayerTurnHost): void {
-  const s = host.screen;
-  const layout = liveSeat(host.curPlayer);
   host.seats[host.curPlayer].spriteId = null;
   host.seats[host.curPlayer].nameBytes = new Uint8Array(0);
-  if (!host.ctx.hud) {
-    s.fillRect(layout.moneyOfs - 644, 30, 84, 7);
-  }
+  // WEB: HUD / players scene graph clear the seat; no canvas fillRect wipe.
   if (host.useSvgPlayers()) {
     host.paintSeatSprite(host.curPlayer, null);
-  } else {
-    s.fillRect(layout.spriteOfs, 83, 87, 7);
-  }
-  if (!host.ctx.hud) {
-    s.fillRect(layout.labelOfs - 641, 30, 110, 7);
   }
   host.drawFortuneWheel(host.curSector);
   host.syncDebug();
@@ -364,7 +293,6 @@ export function removePlayer(host: PlayerTurnHost): void {
  */
 export async function pickPlusPosition(host: PlayerTurnHost): Promise<number> {
   host.setScene('letter-pick');
-  const s = host.screen;
   const { input } = host.m;
 
   if (!host.isHuman(host.curPlayer)) {
@@ -376,7 +304,7 @@ export async function pickPlusPosition(host: PlayerTurnHost): Promise<number> {
   }
 
   if (!host.ctx.hand) {
-    s.screenCopy(SCREEN_W, 60, BACKBUF + 0x320 * 8, 0x320 * 8);
+    throw new Error('hand view required (SVG scene graph)');
   }
   const hand = input.hand;
   hand.step = 16;
@@ -385,15 +313,10 @@ export async function pickPlusPosition(host: PlayerTurnHost): Promise<number> {
   hand.max = hand.ofs + host.guessedWord.length * WORD_CELL_WIDTH - WORD_CELL_WIDTH;
   hand.prev = 12 * SCREEN_W + 0xc8;
   let n = 1;
-  const svgHand = host.ctx.hand;
   for (;;) {
-    if (!svgHand) {
-      s.restoreBehind();
-      s.saveBehind(hand.ofs, 15, 26);
-      s.drawSprite(SPRITE.HAND, hand.ofs, 2);
-    }
+    // WEB: HandView is synced from main.ts; no canvas saveBehind choreography.
     n = Math.floor((hand.ofs - hand.min + WORD_CELL_WIDTH) / WORD_CELL_WIDTH);
-    const letterIdx = host.guessedWord[n - 1] - CP866_A;
+    const letterIdx = host.guessedWord[n - 1]! - CP866_A;
     if (input.pollKeyPressed()) {
       if (host.available[letterIdx] === ALPHA_USED) {
         await host.m.audio.sound(1000, 32);
@@ -401,83 +324,49 @@ export async function pickPlusPosition(host: PlayerTurnHost): Promise<number> {
         break;
       }
     }
-    // WEB: the original busy-waits here; yield so the browser can deliver input.
     await host.delay(10);
-  }
-  if (!svgHand) {
-    s.restoreBehind();
   }
   hand.step = 0;
   return n;
 }
 
-/** dpr:1366-1396 — pick a letter from the alphabet row. Returns letter index 0..31. */
+/**
+ * dpr:1366-1396 — pick a letter. Returns letter index 0..31.
+ * Human: full-screen letter pad (no hand cursor). NPC: programmatic pick, pad stays hidden.
+ */
 export async function pickLetter(host: PlayerTurnHost): Promise<number> {
   host.setScene('letter-pick');
-  const s = host.screen;
-  const { input } = host.m;
-  if (!host.ctx.hand) {
-    s.screenCopy(SCREEN_W, 60, BACKBUF + 0x59b0 * 8, 0x59b0 * 8);
+
+  if (!host.isHuman(host.curPlayer)) {
+    // dpr:1389-1396 — NPC heuristic; do not show the pad.
+    const i = npcPickLetterIndex(
+      host.available,
+      host.guessedWord,
+      host.remaindLetters,
+      host.stage,
+      (n) => host.random(n),
+    );
+    clearAlphabetCell(host, i);
+    return i;
   }
 
-  if (host.isHuman(host.curPlayer)) {
-    const hand = input.hand;
-    const alphaMin = 0x13a * SCREEN_W;
-    hand.step = 20;
-    hand.min = alphaMin;
-    hand.max = alphaMin + 31 * 20;
-
-    // Start on the first available (non-used) letter instead of always А.
-    const startIdx = firstAvailableLetter(host.available);
-    hand.ofs = alphaMin + startIdx * 20;
-    // prev == ofs on first frame so the initial screenCopy is a no-op.
-    hand.prev = hand.ofs;
-
-    let i = startIdx;
-    for (;;) {
-      // If input.ts moved us onto a used cell, jump to the nearest available
-      // in the travel direction.
-      let idx = Math.floor((hand.ofs - hand.min) / 20);
-      if (host.available[idx] === ALPHA_USED) {
-        const dir: 1 | -1 = hand.ofs > hand.prev ? 1 : -1;
-        const next = nearestAvailableLetter(host.available, idx, dir);
-        if (next === null) {
-          break; // No available letter — should not happen.
-        }
-        hand.prev = hand.ofs;
-        hand.ofs = hand.min + next * 20;
-        idx = next;
-      }
-      i = idx;
-      if (!host.ctx.hand) {
-        s.restoreBehind();
-        s.saveBehind(hand.ofs, 15, 26);
-        s.drawSprite(SPRITE.HAND, hand.ofs, 2);
-      }
-      if (input.pollKeyPressed()) {
-        if (!host.ctx.hand) {
-          s.restoreBehind();
-        }
-        hand.step = 0;
-        clearAlphabetCell(host, i);
-        return i;
-      }
-      // WEB: yield (original busy-loop).
-      await host.delay(10);
-    }
+  const pad = host.ctx.letterPad;
+  if (!pad) {
+    throw new Error('letterPad view required (SVG scene graph)');
   }
 
-  // dpr:1389-1396 — the original NPC heuristic. Point at the tile; speech is in openLetter.
-  const i = npcPickLetterIndex(
-    host.available,
-    host.guessedWord,
-    host.remaindLetters,
-    host.stage,
-    (n) => host.random(n),
-  );
-  host.m.input.hand.step = 0;
-  clearAlphabetCell(host, i);
-  return i;
+  // Hide competing alphabet-row UX while the pad covers most of the screen.
+  host.ctx.alphabet?.setVisible(false); // strip retired — pad is the only letter UI
+  host.ctx.hand?.setVisible(false);
+
+  try {
+    const i = await pad.show(host.available);
+    clearAlphabetCell(host, i);
+    return i;
+  } finally {
+    pad.hide();
+    host.ctx.alphabet?.setVisible(false);
+  }
 }
 
 /**
@@ -491,16 +380,14 @@ export async function openLetter(host: PlayerTurnHost,
   award: LetterAward,
 ): Promise<boolean> {
   host.setScene('letter-open');
-  const s = host.screen;
   const seat = host.seats[host.curPlayer];
   const letterByte = host.available[letterIdx];
   const letterChar = decodeCp866(new Uint8Array([letterByte]));
   host.available[letterIdx] = ALPHA_USED;
   host.syncDebug();
 
+  // Strip retired: keep DOS vanish SFX timing without showing the alphabet row.
   await vanishAlphabetTile(host, letterIdx);
-  // Redraw the full alphabet row so no artefacts remain on the layers below
-  // (sprites, name plates) after the tile animation clears the bottom strip.
   host.paintAlphabetRow();
   const replica = letterReplica(letterChar, n);
   await host.playerSay(replica.display, replica.spoken);
@@ -510,14 +397,14 @@ export async function openLetter(host: PlayerTurnHost,
   const openBeforeWalk = collectOpenedBeforeWalk(host.opened);
   // DIFF #23: ASSIST_STAY is 25px, cells 16px. Walk to the stand pose whose
   // midline matches the cell center (not the cell's left edge).
-  // Stops are filled left→right so assistPos[hits] is the rightmost match
-  // (opened first when she walks in from the right).
-  const { assistPos, hits } = collectLetterHits({
+  // Stops are left→right; the walker opens the rightmost first (enter from right).
+  const stops = collectLetterHitStops({
     guessedWord: host.guessedWord,
-    opened: host.opened,
     letterByte,
     wordPos: host.wordPos,
   });
+  applyAssistStopsOpened(host.opened, stops);
+  const hits = stops.length;
   host.remaindLetters -= hits;
   host.syncDebug();
 
@@ -537,14 +424,9 @@ export async function openLetter(host: PlayerTurnHost,
 
   // Assistant walk (dpr:1456-1480). WEB: enter right, open R→L, exit right; sting per flip.
   const revealed = new Set<number>();
-  await host.assistantOpenWalk(assistPos, hits, (stopK) => {
-    const stopOfs = assistPos[stopK];
-    if (host.ctx.board) {
-      revealed.add(host.letterIndexAtAssist(stopOfs));
-      host.syncBoard(true, revealed, openBeforeWalk);
-    } else {
-      paintCanvasOpenedLetter(s, stopOfs, letterChar);
-    }
+  await host.assistantOpenWalk(stops, (stop) => {
+    revealed.add(stop.cellIndex);
+    host.syncBoard(true, revealed, openBeforeWalk);
   }, { dwellMs: OPEN_LETTER_DWELL_MS, letterSting: true });
 
   let k2 = 0;
@@ -566,26 +448,36 @@ export async function openLetter(host: PlayerTurnHost,
   return true;
 }
 
-/** dpr:1300-1359 — the ПРИЗ sector ceremony (human only under DOS policy). */
+/** dpr:1300-1359 — the ПРИЗ sector ceremony (human only under DOS policy).
+ * WEB: CeremonyView + yak/players SVG — canvas blit path deleted.
+ */
 export async function prizeCeremony(host: PlayerTurnHost): Promise<void> {
   host.setScene('prize');
   host.hideWheel();
   host.playSfx('prizesStudio');
   host.playSfx('autoWin');
   host.playSfx('automobileYell');
-  const s = host.screen;
-  const seat = host.seats[host.curPlayer];
-  const layout = liveSeat(host.curPlayer);
 
-  s.screenCopy(SCREEN_W, 350, BACKBUF, 0);
-  s.fillRect(0, 350, SCREEN_W, 7);
-  s.drawSprite(SPRITE.LOGO_POLE, 10 + 10 * SCREEN_W, 7);
-  s.drawSprite(SPRITE.LOGO_CHUDES, 0xc8 + 10 * SCREEN_W, 7);
-  s.drawSprite(SPRITE.YAKUBOVICH_BASE, 0x1e0 + 0xac * SCREEN_W, 7);
-  s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, 0x1ff + 0xad * SCREEN_W, 16);
-  s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0x214 + 0xd1 * SCREEN_W, 16);
-  if (seat.spriteId !== null) {
-    s.drawSprite(seat.spriteId, layout.spriteOfs, 2);
+  const ceremony = host.ctx.ceremony;
+  if (!ceremony) {
+    throw new Error('ceremony view required (SVG scene graph)');
+  }
+  ceremony.showStage([]);
+  host.ctx.yak?.showIdle();
+  if (host.ctx.players) {
+    host.ctx.players.sync(
+      host.seats.map((s, idx) => ({
+        spriteId: idx === host.curPlayer ? s.spriteId : null,
+        ofs: liveSeat(idx).spriteOfs,
+      })),
+    );
+  }
+  // Choice clouds only — hide seat plaques over the gray stage.
+  if (host.ctx.hud) {
+    host.ctx.hud.setSeats(
+      [0, 1, 2].map(() => ({ caption: '', name: '', present: false, score: null })),
+    );
+    host.ctx.hud.setVisible(true);
   }
 
   let i = 3;
@@ -597,7 +489,10 @@ export async function prizeCeremony(host: PlayerTurnHost): Promise<void> {
       await host.yakubovichTalk('Забирайте свои деньги!');
       do {
         await host.m.audio.sound(host.random(50), 10);
-        s.drawSprite(SPRITE.RUB, host.random(295) * SCREEN_W + host.random(400), 2);
+        ceremony.addRub(
+          host.random(PRIZE_LAYOUT.rubScatter.maxX),
+          host.random(PRIZE_LAYOUT.rubScatter.maxY),
+        );
         j -= 100;
       } while (j > 0);
       break;
@@ -606,22 +501,27 @@ export async function prizeCeremony(host: PlayerTurnHost): Promise<void> {
     if (i === 0) {
       host.playSfx('vseVashe');
       await host.yakubovichTalk('Забирайте свой приз!');
-      s.print('Вы выбрали ПРИЗ и мы Вас поздравляем!', 208 * SCREEN_W + 92, 0, 14, 8);
-      s.print('Фирма ИНТЕРМОДА и ПОЛЕ ЧУДЕС дарит Вам', 226 * SCREEN_W + 88, 0, 14, 8);
       const prize = `${PRIZES[host.random(10)]} компании PROCTER & GAMBLE!`;
-      s.print(prize, 244 * SCREEN_W + 240 - host.len(prize) * FONT_HALF_PX, 0, 14, 8);
-      s.print('За ПРИЗОМ обращайтесь по адресу:', 262 * SCREEN_W + 112, 0, 14, 8);
-      s.print('101000-Ц, Москва, проезд Серова, 11', 280 * SCREEN_W + 100, 0, 14, 8);
-      s.print('На конверте сделайте пометку КОМПЬЮТЕРНЫЙ ПРИЗ', 298 * SCREEN_W + 56, 0, 14, 8);
-      s.print('Автор Дима Башуров из Российского Федерального Ядерного Центра', 0x14c * SCREEN_W + 72, 0, 8, 8);
-      s.print('Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', 0x155 * SCREEN_W + 32, 0, 8, 8);
+      const P = PRIZE_LAYOUT;
+      ceremony.showStage([
+        { text: 'Вы выбрали ПРИЗ и мы Вас поздравляем!', ...P.congrats },
+        { text: 'Фирма ИНТЕРМОДА и ПОЛЕ ЧУДЕС дарит Вам', ...P.giftIntro },
+        { text: prize, ...P.giftPrize },
+        { text: 'За ПРИЗОМ обращайтесь по адресу:', ...P.addressHeader },
+        { text: '101000-Ц, Москва, проезд Серова, 11', ...P.addressLine },
+        { text: 'На конверте сделайте пометку КОМПЬЮТЕРНЫЙ ПРИЗ', ...P.addressNote },
+        { text: 'Автор Дима Башуров из Российского Федерального Ядерного Центра', ...P.author, color: 8 },
+        { text: 'Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', ...P.authorContact, color: 8 },
+      ]);
       break;
     }
     j *= 10;
     i -= 1;
   }
   await host.waitKey(INFINITE);
-  s.screenCopy(SCREEN_W, 350, 0, BACKBUF);
+  ceremony.setVisible(false);
+  host.ctx.hud?.setVisible(false);
+  host.ctx.hud?.hideBubbles();
   removePlayer(host);
 }
 
@@ -630,16 +530,16 @@ export async function prizeCeremony(host: PlayerTurnHost): Promise<void> {
  * then exit back to the right (same cadence as openLetter, no scoring/sting).
  */
 export async function assistantRevealRemainingLetters(host: PlayerTurnHost, opts?: { leadInMs?: number }): Promise<void> {
-  const s = host.screen;
   const openBeforeWalk = collectOpenedBeforeWalk(host.opened);
-  const { assistPos, hits } = collectClosedCellStops({
+  const stops = collectClosedCellStops({
     guessedWord: host.guessedWord,
     opened: host.opened,
     wordPos: host.wordPos,
   });
+  applyAssistStopsOpened(host.opened, stops);
   host.remaindLetters = 0;
   host.syncDebug();
-  if (hits === 0) {
+  if (stops.length === 0) {
     host.syncBoard(true);
     host.paintWordBoard();
     return;
@@ -652,16 +552,9 @@ export async function assistantRevealRemainingLetters(host: PlayerTurnHost, opts
   }
 
   const revealed = new Set<number>();
-  await host.assistantOpenWalk(assistPos, hits, (stopK) => {
-    const stopOfs = assistPos[stopK];
-    const cellIdx = host.letterIndexAtAssist(stopOfs);
-    const letterChar = decodeCp866(host.guessedWord.subarray(cellIdx, cellIdx + 1));
-    if (host.ctx.board) {
-      revealed.add(cellIdx);
-      host.syncBoard(true, revealed, openBeforeWalk);
-    } else {
-      paintCanvasOpenedLetter(s, stopOfs, letterChar);
-    }
+  await host.assistantOpenWalk(stops, (stop) => {
+    revealed.add(stop.cellIndex);
+    host.syncBoard(true, revealed, openBeforeWalk);
   }, { dwellMs: REVEAL_REMAINING_DWELL_MS });
 
   host.syncBoard(true);
@@ -678,13 +571,22 @@ export async function takeTurn(host: PlayerTurnHost): Promise<TurnOutcome> {
   const seat = host.seats[host.curPlayer];
   const human = host.isHuman(host.curPlayer);
 
+  // WEB: шкатулка already chosen — finish reveal without re-pick / re-shuffle.
+  if (host.resumeAtBoxChosen) {
+    const { choice, winning } = host.resumeAtBoxChosen;
+    host.resumeAtBoxChosen = null;
+    host.setScene('box-game');
+    await resolveBoxReveal(host, choice, winning);
+    return 'again';
+  }
+
   // WEB: letter already chosen — finish opening without re-spin / re-pick.
   if (host.resumeAtLetterOpen) {
     const { awardKind, awardUnit, letterIdx, plusPosition } = host.resumeAtLetterOpen;
     host.resumeAtLetterOpen = null;
     const found = await openLetter(host, letterIdx, plusPosition, letterAwardFromResume(awardKind, awardUnit));
     if (found) {
-      if (human) { host.movesForBox += 1; }
+      host.movesForBox += 1;
       return 'again';
     }
     return 'next';
@@ -699,7 +601,7 @@ export async function takeTurn(host: PlayerTurnHost): Promise<TurnOutcome> {
     host.persistCheckpoint('letter-open', award, { letterIdx });
     const found = await openLetter(host, letterIdx, 0, award);
     if (found) {
-      if (human) { host.movesForBox += 1; }
+      host.movesForBox += 1;
       return 'again';
     }
     return 'next';
@@ -769,9 +671,7 @@ export async function takeTurn(host: PlayerTurnHost): Promise<TurnOutcome> {
       host.persistCheckpoint('letter-open', { kind: 'keep' }, { letterIdx, plusPosition: n });
       const found = await openLetter(host, letterIdx, n, { kind: 'keep' });
       if (found) {
-        if (human) {
-          host.movesForBox += 1;
-        }
+        host.movesForBox += 1;
         return 'again';
       }
       return 'next';
@@ -805,9 +705,7 @@ export async function takeTurn(host: PlayerTurnHost): Promise<TurnOutcome> {
   host.persistCheckpoint('letter-open', award, { letterIdx });
   const found = await openLetter(host, letterIdx, 0, award);
   if (found) {
-    if (human) {
-      host.movesForBox += 1;
-    }
+    host.movesForBox += 1;
     return 'again';
   }
   return 'next';

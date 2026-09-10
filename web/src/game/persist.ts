@@ -26,10 +26,11 @@ export interface GameProgressSave {
    * after-spin: resume after the drum stopped (sector outcome pending; no re-spin).
    * letter-pick: resume just before the letter-pick prompt (spin already done).
    * letter-open: resume with the letter already chosen (openLetter pending).
+   * box-chosen: шкатулка left/right already picked; winning box locked (reveal pending).
    * word-solved: resume after the player correctly named the word (round-end pending).
    * between-rounds: resume at next stage setup (saved before round-start music).
    */
-  checkpoint: 'in-round' | 'after-spin' | 'letter-pick' | 'letter-open' | 'word-solved' | 'between-rounds' | 'supergame';
+  checkpoint: 'in-round' | 'after-spin' | 'letter-pick' | 'letter-open' | 'box-chosen' | 'word-solved' | 'between-rounds' | 'supergame';
   rngState: number;
   humanSeats: 1 | 2;
   charId: number;
@@ -56,6 +57,10 @@ export interface GameProgressSave {
   pickedLetterIdx?: number;
   /** letter-open from ПЛЮС: 1-based word position (openLetter `n`). */
   plusPosition?: number;
+  /** box-chosen: 0 = left, 1 = right (player pick). */
+  boxChoice?: number;
+  /** box-chosen: 0/1 which closed box holds the money after shuffle. */
+  boxWinning?: number;
 }
 
 export interface UiPrefs {
@@ -72,6 +77,7 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
     v.version !== PROGRESS_VERSION ||
     (v.checkpoint !== 'in-round' && v.checkpoint !== 'after-spin' &&
      v.checkpoint !== 'letter-pick' && v.checkpoint !== 'letter-open' &&
+     v.checkpoint !== 'box-chosen' &&
      v.checkpoint !== 'word-solved' && v.checkpoint !== 'between-rounds' &&
      v.checkpoint !== 'supergame') ||
     typeof v.rngState !== 'number' ||
@@ -94,6 +100,7 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
   if (
     (v.checkpoint === 'in-round' || v.checkpoint === 'after-spin' ||
       v.checkpoint === 'letter-pick' || v.checkpoint === 'letter-open' ||
+      v.checkpoint === 'box-chosen' ||
       v.checkpoint === 'word-solved') &&
     v.guessedWord.length === 0
   ) {
@@ -101,6 +108,14 @@ export function isProgressSave(value: unknown): value is GameProgressSave {
   }
   if (v.checkpoint === 'letter-open') {
     if (typeof v.pickedLetterIdx !== 'number' || v.pickedLetterIdx < 0 || v.pickedLetterIdx > 31) {
+      return false;
+    }
+  }
+  if (v.checkpoint === 'box-chosen') {
+    if (v.boxChoice !== 0 && v.boxChoice !== 1) {
+      return false;
+    }
+    if (v.boxWinning !== 0 && v.boxWinning !== 1) {
       return false;
     }
   }

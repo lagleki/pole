@@ -1,35 +1,22 @@
 /**
  * Player speech bubbles, binary choice lean, confirm, and money recount
  * (dpr:560-637 + DIFF #21 / #31).
+ * WEB: HudView / PlayersView scene graph only — canvas bubble blit deleted.
  */
-import { BACKBUF2, INFINITE, SCREEN_W, type AudioApi, type InputApi, type ScreenApi } from '../engine/types';
+import { INFINITE, type AudioApi, type InputApi, type ScreenApi } from '../engine/types';
 import { spokenCasing, type HostTts, type TtsRole } from '../engine/tts';
-import { defaultAssetSpec } from '../spec';
-import { DECISION_ANIM, liveSeat } from './constants';
+import { DECISION_ANIM } from './constants';
 import { MONEY_RECOUNT_TICK_MS, moneyRecountStride } from './moneyRecount';
 import type { GameSeat } from './gameTypes';
 import type { HudView, SpriteBox } from './svgHud';
 import type { PlayersView } from './svgPlayers';
 
-const SPRITE = defaultAssetSpec.spriteIds;
-
-/** 8px font: half glyph width used to center bubble text. */
+/** 8px font: half glyph width used to center bubble text (hand lean threshold). */
 const FONT_HALF_PX = 4;
-const BUBBLE_W = 84;
-const BUBBLE_H = 39;
-const BUBBLE_GAP = 4;
-const BUBBLE_TEXT_ROW = 8;
-const BUBBLE_TEXT_MID_X = 44;
-const TRANSPARENT_INDEX = 2;
 const NPC_BUBBLE_MS = 1000;
 const DECISION_CENTER = 2;
 const DECISION_LEAN_RIGHT = 4;
-const SEAT_POSE_H = 83;
 const SEAT_POSE_W = 99;
-
-function centeredBubbleTextOfs(baseOfs: number, textLen: number): number {
-  return baseOfs + BUBBLE_TEXT_ROW * SCREEN_W + BUBBLE_TEXT_MID_X - textLen * FONT_HALF_PX;
-}
 
 export interface PlayerPresentationHost {
   readonly screen: ScreenApi;
@@ -59,26 +46,19 @@ export interface PlayerPresentationHost {
   len(text: string): number;
 }
 
-export function showPlayerBubble(host: PlayerPresentationHost, text: string): void {
-  const hud = host.hud;
-  if (hud) {
-    hud.showTalk(host.spriteBox(host.curPlayer), text, host.talkSide(host.curPlayer));
-    return;
+function requireHud(host: PlayerPresentationHost): HudView {
+  if (!host.hud) {
+    throw new Error('hud view required (SVG scene graph)');
   }
-  const bubbleOfs = liveSeat(host.curPlayer).talkBubbleOfs;
-  const s = host.screen;
-  s.screenCopy(BUBBLE_W, BUBBLE_H, BACKBUF2, bubbleOfs);
-  s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, TRANSPARENT_INDEX);
-  s.print(text, centeredBubbleTextOfs(bubbleOfs, host.len(text)), 0, 14, 8);
+  return host.hud;
+}
+
+export function showPlayerBubble(host: PlayerPresentationHost, text: string): void {
+  requireHud(host).showTalk(host.spriteBox(host.curPlayer), text, host.talkSide(host.curPlayer));
 }
 
 export function hidePlayerBubble(host: PlayerPresentationHost): void {
-  if (host.hud) {
-    host.hud.hideBubbles();
-    return;
-  }
-  const bubbleOfs = liveSeat(host.curPlayer).talkBubbleOfs;
-  host.screen.screenCopy(BUBBLE_W, BUBBLE_H, bubbleOfs, BACKBUF2);
+  requireHud(host).hideBubbles();
 }
 
 /**
@@ -123,27 +103,12 @@ export async function playerDecision(
   forced?: number,
   opts?: { readonly deferSpeech?: boolean },
 ): Promise<number> {
-  const s = host.screen;
   const { input } = host;
   const seatIdx = host.curPlayer;
-  const { spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
-  // Seat 1: the 99×83 pose blit covers the left cloud’s tail and leaves the
-  // right one intact, so the pair looks vertically skewed. Sit both above the sprite.
-  const pairOfs = seatIdx === 1 ? talkBubbleOfs - 20 * SCREEN_W : talkBubbleOfs;
-  const rightBubble = pairOfs + BUBBLE_W + BUBBLE_GAP;
-
   const leftText = phrase0.length > 0 ? phrase0 : label1;
   const rightText = phrase1.length > 0 ? phrase1 : label2;
-  const hud = host.hud;
-  if (hud) {
-    hud.showChoice(host.spriteBox(seatIdx, SEAT_POSE_W), leftText, rightText);
-  } else {
-    s.screenCopy(BUBBLE_W * 2 + BUBBLE_GAP, BUBBLE_H, BACKBUF2, pairOfs);
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, pairOfs, TRANSPARENT_INDEX);
-    s.print(leftText, centeredBubbleTextOfs(pairOfs, host.len(leftText)), 0, 14, 8);
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, rightBubble, TRANSPARENT_INDEX);
-    s.print(rightText, centeredBubbleTextOfs(rightBubble, host.len(rightText)), 0, 14, 8);
-  }
+  const hud = requireHud(host);
+  hud.showChoice(host.spriteBox(seatIdx, SEAT_POSE_W), leftText, rightText);
 
   let result = 0;
   if (host.isHuman(seatIdx)) {
@@ -161,9 +126,6 @@ export async function playerDecision(
       }
       if (host.useSvgPlayers()) {
         host.players?.setSeat(seatIdx, DECISION_ANIM[i]!);
-      } else {
-        s.fillRect(spriteOfs, SEAT_POSE_H, SEAT_POSE_W, 7);
-        s.drawSprite(DECISION_ANIM[i]!, spriteOfs, TRANSPARENT_INDEX);
       }
       await host.delay(100);
       if (hand.ofs !== 2 && input.pollKeyPressed()) {
@@ -179,11 +141,7 @@ export async function playerDecision(
     result = forced ?? host.random(2);
   }
 
-  if (hud) {
-    hud.hideBubbles();
-  } else {
-    s.screenCopy(BUBBLE_W * 2 + BUBBLE_GAP, BUBBLE_H, pairOfs, BACKBUF2);
-  }
+  hud.hideBubbles();
   await host.yakubovichSetSilent();
   if (!opts?.deferSpeech) {
     await playerSay(host, result === 0 ? phrase0 : phrase1);
@@ -200,24 +158,12 @@ export async function playerConfirm(
   phrase: string,
   opts?: { readonly deferSpeech?: boolean },
 ): Promise<void> {
-  const s = host.screen;
   const seatIdx = host.curPlayer;
-  const { spriteOfs, talkBubbleOfs } = liveSeat(seatIdx);
-  const bubbleOfs = (seatIdx === 1 ? talkBubbleOfs - 20 * SCREEN_W : talkBubbleOfs) + BUBBLE_W + BUBBLE_GAP;
-  const hud = host.hud;
-  if (hud) {
-    hud.showSingleChoice(host.spriteBox(seatIdx, SEAT_POSE_W), phrase);
-  } else {
-    s.screenCopy(BUBBLE_W, BUBBLE_H, BACKBUF2, bubbleOfs);
-    s.drawSprite(SPRITE.SPEECH_BUBBLE2, bubbleOfs, TRANSPARENT_INDEX);
-    s.print(phrase, centeredBubbleTextOfs(bubbleOfs, host.len(phrase)), 0, 14, 8);
-  }
+  const hud = requireHud(host);
+  hud.showSingleChoice(host.spriteBox(seatIdx, SEAT_POSE_W), phrase);
 
   if (host.useSvgPlayers()) {
     host.players?.setSeat(seatIdx, DECISION_ANIM[DECISION_LEAN_RIGHT]!);
-  } else {
-    s.fillRect(spriteOfs, SEAT_POSE_H, SEAT_POSE_W, 7);
-    s.drawSprite(DECISION_ANIM[DECISION_LEAN_RIGHT]!, spriteOfs, TRANSPARENT_INDEX);
   }
 
   if (host.isHuman(seatIdx)) {
@@ -226,11 +172,7 @@ export async function playerConfirm(
     await host.delay(900);
   }
 
-  if (hud) {
-    hud.hideBubbles();
-  } else {
-    s.screenCopy(BUBBLE_W, BUBBLE_H, bubbleOfs, BACKBUF2);
-  }
+  hud.hideBubbles();
   host.paintSeatSprite(seatIdx);
   await host.yakubovichSetSilent();
   if (!opts?.deferSpeech) {
@@ -249,35 +191,22 @@ export async function updateMoney(
     host.paintScore(seatIdx);
     return;
   }
-  const s = host.screen;
-  const { moneyOfs } = liveSeat(seatIdx);
-  const hud = host.hud;
-  if (!hud) {
-    s.fillRect(moneyOfs - 644, 30, 84, 7);
-  }
+  requireHud(host);
   const delta = seat.score - fromScore;
   const stride = moneyRecountStride(delta);
   let shown = fromScore;
-  if (hud) {
-    host.setMoneyRecount({ seat: seatIdx, score: shown }, null);
-    host.syncHud(true);
-  }
+  host.setMoneyRecount({ seat: seatIdx, score: shown }, null);
+  host.syncHud(true);
   while (shown < seat.score) {
     shown = Math.min(seat.score, shown + stride);
-    if (hud) {
-      host.setMoneyRecount(
-        { seat: seatIdx, score: shown },
-        { seat: seatIdx, x: host.random(6) - 2, y: host.random(3) - 1 },
-      );
-      host.syncHud(true);
-    } else {
-      const coins = Math.min(stride, seat.score - (shown - stride));
-      for (let c = 0; c < coins; c += 1) {
-        s.drawSprite(SPRITE.MONEY, moneyOfs + host.random(7) * SCREEN_W - SCREEN_W + host.random(12) - 4, 1);
-      }
-    }
+    host.setMoneyRecount(
+      { seat: seatIdx, score: shown },
+      { seat: seatIdx, x: host.random(6) - 2, y: host.random(3) - 1 },
+    );
+    host.syncHud(true);
     const freq = host.random(10) + 50;
     await host.audio.sound(freq, MONEY_RECOUNT_TICK_MS, { audible: true });
   }
+  host.setMoneyRecount(null, null);
   host.paintScore(seatIdx);
 }

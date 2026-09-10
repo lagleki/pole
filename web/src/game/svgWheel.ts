@@ -1,8 +1,8 @@
 /**
  * SVG fortune drum overlay (DIFF #19 / #26). Classic 36-sector TV layout.
- * Larger disk, hub low; clipped at the alphabet row. Live play stacks this
- * above the rear canvas; pegs sit higher so handles stay crisp over the disk.
- * punchWheelHole() remains for tests / optional canvas-on-top presenters.
+ * Larger disk, hub low. Alphabet strip retired (letter pad) — no bottom clip.
+ * Live play stacks this above the rear canvas; pegs sit higher so handles stay
+ * crisp over the disk. punchWheelHole() remains for tests / optional presenters.
  */
 import { SCREEN_W, VISIBLE_H } from '../engine/types';
 import { defaultRenderSpec } from '../spec';
@@ -21,17 +21,21 @@ export interface WheelView {
 
 /** Original DOS cell — hub stays on its horizontal midline. */
 const { x: BOX_X, y: BOX_Y, width: BOX_W } = defaultRenderSpec.wheel.clearRect;
-/** Alphabet row (letter backs at 0x14c). Overlay stops here so the drum tucks under the letters. */
-const CLIP_Y = 0x14c;
+/** Full stage height — drum is no longer tucked under a letter row. */
+const CLIP_Y = VISIBLE_H;
 const HUB_X = BOX_X + BOX_W / 2 + DRUM_NUDGE_X;
-/** Shifted down vs the DOS cell center so a bigger disk tucks under the letters. */
-const HUB_Y = 346;
+/** Hub sits low so the disk fills the lower stage without alphabet tuck. */
+const HUB_Y = 354;
 const R = 136;
 const PEG = 11;
 /** Punch only the disk (not the pegs) so bricks stay visible around the handles. */
 const HOLE_R = R + 2;
 const LABEL_R = R - 12;
 const ARROW_LEN = R * 0.86;
+/** Constant half-width of the arrow shaft (no taper along the length). */
+const ARROW_SHAFT_HALF = 1.35;
+const ARROW_TIP = 5.5;
+
 const STEP_DEG = 360 / WHEEL_SECTOR_COUNT;
 const HALF_WEDGE = STEP_DEG / 2;
 
@@ -113,10 +117,7 @@ export function buildSuperWheelSvg(): string {
   }).join('');
 
   return svgShell(`<defs>
-        <clipPath id="wheel-letter-clip">
-          <rect x="0" y="0" width="640" height="${CLIP_Y}"/>
-        </clipPath>
-        <linearGradient id="rim-metal" gradientUnits="userSpaceOnUse" x1="${-R}" y1="${-R * 0.4}" x2="${R}" y2="${R * 0.35}">
+<linearGradient id="rim-metal" gradientUnits="userSpaceOnUse" x1="${-R}" y1="${-R * 0.4}" x2="${R}" y2="${R * 0.35}">
           <stop offset="0%" stop-color="#4a5160"/>
           <stop offset="22%" stop-color="#9aa3b2"/>
           <stop offset="48%" stop-color="#e8edf4"/>
@@ -131,19 +132,20 @@ export function buildSuperWheelSvg(): string {
           <stop offset="100%" stop-color="#4a5160"/>
         </linearGradient>
       </defs>
-      <g clip-path="url(#wheel-letter-clip)">
+      <g>
         <g transform="translate(${HUB_X} ${HUB_Y})">
           <g id="wheel-rot">
             ${wedges}
           </g>
           <circle r="${R + 0.6}" fill="none" stroke="url(#rim-metal)" stroke-width="1.15"/>
           <g id="wheel-arrow">
-            <path d="M 0 6
-              L 1.2 ${-ARROW_LEN + 12}
-              L 4.3 ${-ARROW_LEN + 13}
+            <path d="M ${-ARROW_SHAFT_HALF} 6
+              L ${ARROW_SHAFT_HALF} 6
+              L ${ARROW_SHAFT_HALF} ${-ARROW_LEN + ARROW_TIP + 2}
+              L ${ARROW_TIP} ${-ARROW_LEN + ARROW_TIP + 2}
               L 0 ${-ARROW_LEN - 4}
-              L -4.3 ${-ARROW_LEN + 13}
-              L -1.2 ${-ARROW_LEN + 12}
+              L ${-ARROW_TIP} ${-ARROW_LEN + ARROW_TIP + 2}
+              L ${-ARROW_SHAFT_HALF} ${-ARROW_LEN + ARROW_TIP + 2}
               Z" fill="url(#arrow-shaft)" stroke="#6a7382" stroke-width="0.5" stroke-linejoin="round"/>
           </g>
           <circle r="9" fill="${black}"/>
@@ -155,10 +157,7 @@ export function buildSuperWheelSvg(): string {
 function buildSuperPegsSvg(): string {
   const halfWedge = SUPER_WHEEL_STEP_DEG / 2;
   return svgShell(`<defs>
-        <clipPath id="pegs-letter-clip">
-          <rect x="0" y="0" width="640" height="${CLIP_Y}"/>
-        </clipPath>
-        <linearGradient id="peg-stem" gradientUnits="userSpaceOnUse" x1="-3" y1="0" x2="3" y2="0">
+<linearGradient id="peg-stem" gradientUnits="userSpaceOnUse" x1="-3" y1="0" x2="3" y2="0">
           <stop offset="0%" stop-color="#6e7684"/>
           <stop offset="35%" stop-color="#e8edf4"/>
           <stop offset="55%" stop-color="#ffffff"/>
@@ -172,7 +171,7 @@ function buildSuperPegsSvg(): string {
           <stop offset="100%" stop-color="#4a5160"/>
         </radialGradient>
       </defs>
-      <g clip-path="url(#pegs-letter-clip)">
+      <g>
         <g transform="translate(${HUB_X} ${HUB_Y})">
           <g id="wheel-pegs-rot">${pegMarksFor(SUPER_WHEEL_SECTOR_COUNT, SUPER_WHEEL_STEP_DEG, halfWedge)}</g>
         </g>
@@ -193,10 +192,7 @@ export function buildWheelSvg(): string {
   }).join('');
 
   return svgShell(`<defs>
-        <clipPath id="wheel-letter-clip">
-          <rect x="0" y="0" width="640" height="${CLIP_Y}"/>
-        </clipPath>
-        <linearGradient id="rim-metal" gradientUnits="userSpaceOnUse" x1="${-R}" y1="${-R * 0.4}" x2="${R}" y2="${R * 0.35}">
+<linearGradient id="rim-metal" gradientUnits="userSpaceOnUse" x1="${-R}" y1="${-R * 0.4}" x2="${R}" y2="${R * 0.35}">
           <stop offset="0%" stop-color="#4a5160"/>
           <stop offset="22%" stop-color="#9aa3b2"/>
           <stop offset="48%" stop-color="#e8edf4"/>
@@ -211,19 +207,20 @@ export function buildWheelSvg(): string {
           <stop offset="100%" stop-color="#4a5160"/>
         </linearGradient>
       </defs>
-      <g clip-path="url(#wheel-letter-clip)">
+      <g>
         <g transform="translate(${HUB_X} ${HUB_Y})">
           <g id="wheel-rot">
             ${wedges}
           </g>
           <circle r="${R + 0.6}" fill="none" stroke="url(#rim-metal)" stroke-width="1.15"/>
           <g id="wheel-arrow">
-            <path d="M 0 6
-              L 1.2 ${-ARROW_LEN + 12}
-              L 4.3 ${-ARROW_LEN + 13}
+            <path d="M ${-ARROW_SHAFT_HALF} 6
+              L ${ARROW_SHAFT_HALF} 6
+              L ${ARROW_SHAFT_HALF} ${-ARROW_LEN + ARROW_TIP + 2}
+              L ${ARROW_TIP} ${-ARROW_LEN + ARROW_TIP + 2}
               L 0 ${-ARROW_LEN - 4}
-              L -4.3 ${-ARROW_LEN + 13}
-              L -1.2 ${-ARROW_LEN + 12}
+              L ${-ARROW_TIP} ${-ARROW_LEN + ARROW_TIP + 2}
+              L ${-ARROW_SHAFT_HALF} ${-ARROW_LEN + ARROW_TIP + 2}
               Z" fill="url(#arrow-shaft)" stroke="#6a7382" stroke-width="0.5" stroke-linejoin="round"/>
           </g>
           <circle r="9" fill="${black}"/>
@@ -234,10 +231,7 @@ export function buildWheelSvg(): string {
 
 export function buildPegsSvg(): string {
   return svgShell(`<defs>
-        <clipPath id="pegs-letter-clip">
-          <rect x="0" y="0" width="640" height="${CLIP_Y}"/>
-        </clipPath>
-        <linearGradient id="peg-stem" gradientUnits="userSpaceOnUse" x1="-3" y1="0" x2="3" y2="0">
+<linearGradient id="peg-stem" gradientUnits="userSpaceOnUse" x1="-3" y1="0" x2="3" y2="0">
           <stop offset="0%" stop-color="#6e7684"/>
           <stop offset="35%" stop-color="#e8edf4"/>
           <stop offset="55%" stop-color="#ffffff"/>
@@ -251,7 +245,7 @@ export function buildPegsSvg(): string {
           <stop offset="100%" stop-color="#4a5160"/>
         </radialGradient>
       </defs>
-      <g clip-path="url(#pegs-letter-clip)">
+      <g>
         <g transform="translate(${HUB_X} ${HUB_Y})">
           <g id="wheel-pegs-rot">${pegMarks()}</g>
         </g>
@@ -347,11 +341,7 @@ export interface WheelHoleKeep {
  * Make the drum disk transparent on the DOS canvas so a legacy stack with the
  * SVG wheel behind the canvas can show through (tests / optional presenters).
  * Live play keeps the canvas at the back of the DOM stack, so overlays sit on
- * top without punching. Down to the alphabet row — players and name plates
- * included when this is used. The alphabet strip (y ≥ CLIP_Y) is also punched so
- * the SVG letter tiles show through; the pointing hand is then painted from
- * the sprite itself (not leftover floor pixels), so moving it cannot leave a
- * gray silhouette on the hole.
+ * top without punching. Punches the full disk (alphabet strip retired).
  */
 /** Half-width of the soft feather band at the hole edge, in CSS pixels. */
 const FEATHER = 2;
@@ -386,13 +376,6 @@ export function punchWheelHole(rgba: Uint8ClampedArray, keep?: WheelHoleKeep | n
         const t = (outerR - d) / (FEATHER * 2); // 0 at outer edge → 1 at inner edge
         rgba[i] = Math.round(rgba[i] * (1 - t));
       }
-    }
-  }
-
-  for (let y = CLIP_Y; y < VISIBLE_H; y += 1) {
-    const row = y * SCREEN_W * 4;
-    for (let x = 0; x < SCREEN_W; x += 1) {
-      rgba[row + x * 4 + 3] = 0;
     }
   }
 

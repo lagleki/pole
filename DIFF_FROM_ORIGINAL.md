@@ -149,9 +149,10 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     cell: the hub sits lower (with the arrow) and the overlay is clipped at the alphabet row.
     SVG overlays sit above the rear canvas (no framebuffer punch-holes); the drum tucks
     under the letters while players and name plates are clipped by the disk so they stay
-    behind it. Live play uses the SVG stack only (`present.setMode('svg')`); the
-    `#legacy-canvas` layer blits the framebuffer only for splash, prize, endgame and
-    top-8 (`present.setMode('legacy')`). The alphabet row is the same SVG stack
+    behind it. Live play uses the SVG stack only — splash, prize ceremony, endgame
+    congrats and the top-8 rise are declarative SVG views (SplashView /
+    CeremonyView + tween), not framebuffer blits or `present.setMode('legacy')`.
+    The `#legacy-canvas` path is gone; a lightweight rAF loop syncs the hand. The alphabet row is the same SVG stack
     (32 tiles, 20×18, y = 332), not the DOS LETTER_BACK sprites. Seat captions,
     names and player speech bubbles are SVG as well: a two-option prompt is two
     clouds inside the sprite box (tails inward), vertically centered on the sprite.
@@ -173,6 +174,10 @@ follows DOS unless noted. Full policy with rationale: `docs/architecture.md`.
     and side walls as vertical rectangles (DOS 40×139) in the scenic stack under
     the canvas so the assistant walks full-width (x=0…640) between the back wall
     and the side walls without covering players/HUD — not BRICK*/LAMP/WALL_* blits.
+    The parquet / tile floor is presentation-only (`studioFloorLayout.ts`): SVG
+    perspective-mapped ceramic tiles with clear grout contrast on `#stage-backdrop`
+    (z-index 0), from DOS floorRect.y≈111 tapering to the side-wall bases — not a
+    DOS fillRect/framebuffer floor and not the fragile CSS 3D gradient grid.
     Шкатулки are the three original BOX_* sprites as an SVG overlay that
     translates in, rather than a screenCopy over the player.
     The hub is 8 px left of the DOS cell

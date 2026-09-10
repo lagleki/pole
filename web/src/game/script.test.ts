@@ -10,6 +10,7 @@ import { VirtualClock } from '../engine/timing';
 import type { Machine } from '../engine/types';
 import { PROGRESS_VERSION, type GameProgressSave } from './persist';
 import { createDebugState, runGame, type GameContext, type Scene } from './script';
+import { attachSceneFakes } from './testSceneViews';
 import type { PlayerSeatPose, PlayersView } from './svgPlayers';
 import { fonts, lib, ovl, pic } from './testAssets';
 
@@ -60,6 +61,7 @@ function buildHarness(seed: number, humanSeats: 1 | 2 = 2): Harness {
     state,
     options: { humanSeats },
   };
+  attachSceneFakes(ctx);
   return { machine, clock, input, ctx, sceneHistory, topPlayers, controller };
 }
 
@@ -144,7 +146,7 @@ describe('full game script (headless, virtual time, real assets)', () => {
     ] as Scene[]) {
       expect(h.sceneHistory).toContain(expected);
     }
-    expect(h.sceneHistory).not.toContain('box-game');
+    // DIFF #30: шкатулки trigger for every seat (including NPC) after 3 hits.
     expect(h.sceneHistory).not.toContain('prize');
     expect(h.sceneHistory).not.toContain('word-solve');
 

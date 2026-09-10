@@ -397,55 +397,17 @@ function wallDefsMarkup(): string {
       </linearGradient>`;
 }
 
-/** Inner hall-facing edge of each side wall (DOS WALL_LEFT / WALL_RIGHT). */
-export const FLOOR_BACK_LEFT_X = WALL_W;
-export const FLOOR_BACK_RIGHT_X = SCREEN_W - WALL_W;
-export const FLOOR_BACK_Y = WALL_BOT;
-
-/**
- * Floor geometry in internal 640×350 space.
- * Side walls meet the floor at (FLOOR_BACK_LEFT_X, FLOOR_BACK_Y) and (FLOOR_BACK_RIGHT_X, FLOOR_BACK_Y).
- * The perspective floor tapers at this slope naturally without hard geometric clipping.
- */
-export function stageFloorClipPercents(): {
-  topLeft: { x: number; y: number };
-  topRight: { x: number; y: number };
-  bottomLeft: { x: number; y: number };
-  bottomRight: { x: number; y: number };
-} {
-  const topY = (FLOOR_BACK_Y / VISIBLE_H) * 100;
-  const leftX = (FLOOR_BACK_LEFT_X / SCREEN_W) * 100;
-  const rightX = (FLOOR_BACK_RIGHT_X / SCREEN_W) * 100;
-  return {
-    topLeft: { x: leftX, y: topY },
-    topRight: { x: rightX, y: topY },
-    bottomLeft: { x: 0, y: 100 },
-    bottomRight: { x: 100, y: 100 },
-  };
-}
-
-export function stageFloorClipPath(): string {
-  const p = stageFloorClipPercents();
-  return `polygon(${p.topLeft.x}% ${p.topLeft.y}%, ${p.topRight.x}% ${p.topRight.y}%, ${p.bottomRight.x}% ${p.bottomRight.y}%, ${p.bottomLeft.x}% ${p.bottomLeft.y}%)`;
-}
-
-export function stageBackdropMarkup(): string {
-  return `<div class="stage-wall-band"></div>
-    <div class="stage-floor">
-      <div class="stage-floor-tiles" aria-hidden="true"></div>
-    </div>`;
-}
-
-/** @deprecated SVG backdrop replaced by CSS floor tiles; kept for tests. */
-export function buildStageBackdropSvg(): string {
-  return stageBackdropMarkup();
-}
-
-export function mountStageBackdrop(host: HTMLElement): void {
-  const floorColor = ega(defaultRenderSpec.stage.floorRect.fillColor);
-  host.style.setProperty('--stage-floor-base', floorColor);
-  host.innerHTML = stageBackdropMarkup();
-}
+/** Floor geometry + SVG parquet — see studioFloorLayout.ts (DIFF #19). */
+export {
+  FLOOR_BACK_LEFT_X,
+  FLOOR_BACK_RIGHT_X,
+  FLOOR_BACK_Y,
+  buildStageBackdropSvg,
+  mountStageBackdrop,
+  stageBackdropMarkup,
+  stageFloorClipPath,
+  stageFloorClipPercents,
+} from './studioFloorLayout';
 
 export function buildStudioSvg(kinds: readonly number[] = restoredBrickKinds()): string {
   const back = backWallRect();

@@ -1,3 +1,4 @@
+import { VISIBLE_H } from '../engine/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -73,13 +74,13 @@ describe('svg wheel', () => {
     expect(svg).not.toContain('ПРИЗ');
     expect(svgWheelLayout.box).toEqual({ x: 128, y: 154, width: 223, height: 172 });
     expect(svgWheelLayout.center.x).toBe(128 + 223 / 2 + DRUM_NUDGE_X);
-    expect(svgWheelLayout.center.y).toBe(346);
+    expect(svgWheelLayout.center.y).toBe(354);
     expect(svgWheelLayout.radii.x).toBeGreaterThan(120);
     expect(svgWheelLayout.radii.x).toBe(svgWheelLayout.radii.y);
-    expect(svg).toContain('id="wheel-letter-clip"');
+    expect(svg).not.toContain('id="wheel-letter-clip"');
     expect(svg).toContain('viewBox="0 0 640 350"');
     expect(svgWheelLayout.halfStepDeg).toBe(10);
-    expect(svgWheelLayout.clipY).toBe(0x14c);
+    expect(svgWheelLayout.clipY).toBe(350);
     expect(buildPegsSvg()).toContain('id="wheel-pegs-rot"');
     expect(svgWheelLayout.holeR).toBeLessThan(svgWheelLayout.radii.x + 4);
   });
@@ -117,7 +118,7 @@ describe('svg wheel', () => {
     expect(edge.left.x + edge.left.w).toBeLessThanOrEqual(edge.right.x);
   });
 
-  it('punches a circular hole down to the alphabet row and keeps the hand', () => {
+  it('punches a circular hole for the full disk and keeps the hand', () => {
     const rgba = new Uint8ClampedArray(640 * 350 * 4);
     rgba.fill(255);
     const keep = {
@@ -129,11 +130,9 @@ describe('svg wheel', () => {
     };
     punchWheelHole(rgba, keep);
     const hub = svgWheelLayout.center;
-    const punchedY = Math.min(svgWheelLayout.clipY - 1, Math.floor(hub.y));
+    const punchedY = Math.min(VISIBLE_H - 1, Math.floor(hub.y));
     const hubI = (punchedY * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[hubI]).toBe(0);
-    const letterRow = (0x14c * 640 + Math.floor(hub.x)) * 4 + 3;
-    expect(rgba[letterRow]).toBe(0);
     const handOpaque = (0x13a * 640 + 240) * 4;
     expect(rgba[handOpaque]).toBe(0);
     expect(rgba[handOpaque + 1]).toBe(0);
@@ -141,7 +140,7 @@ describe('svg wheel', () => {
     expect(rgba[handOpaque + 3]).toBe(255);
     const handTransparent = (0x13a * 640 + 241) * 4 + 3;
     expect(rgba[handTransparent]).toBe(0);
-    const outsideDisk = ((svgWheelLayout.clipY - 2) * 640 + Math.floor(hub.x + svgWheelLayout.radii.x + 8)) * 4 + 3;
+    const outsideDisk = ((Math.floor(hub.y) - Math.ceil(svgWheelLayout.radii.y) - 4) * 640 + Math.floor(hub.x)) * 4 + 3;
     expect(rgba[outsideDisk]).toBe(255);
   });
 });
@@ -163,8 +162,10 @@ describe('progress persistence', () => {
     expect(isProgressSave({ version: 1 })).toBe(false);
   });
 
-  it('accepts after-spin and letter-open anti-cheat checkpoints', () => {
+  it('accepts after-spin, letter-open, and box-chosen anti-cheat checkpoints', () => {
     expect(isProgressSave(sampleSave({ checkpoint: 'after-spin' }))).toBe(true);
+    expect(isProgressSave(sampleSave({ checkpoint: 'box-chosen', boxChoice: 0, boxWinning: 1 }))).toBe(true);
+    expect(isProgressSave(sampleSave({ checkpoint: 'box-chosen' }))).toBe(false);
     expect(isProgressSave(sampleSave({
       checkpoint: 'letter-open',
       awardKind: 'perHit',

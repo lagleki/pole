@@ -189,61 +189,44 @@ body {
   height: 100%;
   pointer-events: none;
   --stage-wall-top: #d8d8d8;
-  --stage-tile-face: #b8b8b8;
-  --stage-tile-grout: #8f8f8f;
-  /* CSS 3D perspective creates natural floor taper from bottom screen corners
-     (0,350)/(640,350) towards side walls (40,164)/(600,164) WITHOUT clipping tiles. */
-  --stage-floor-perspective: 640px;
-  --stage-floor-tilt: 56deg;
-  /* Tile plane spans 3× stage width (−1…+1 screens) under the same perspective. */
-  --stage-floor-span: 3;
+  --stage-tile-face: #c6c6c6;
+  --stage-tile-face-alt: #a4a4a4;
+  --stage-tile-grout: #555555;
+  --stage-floor-base: var(--stage-tile-face);
+  /* DOS floorRect.y / VISIBLE_H — driven by studioFloorLayout on mount */
+  --stage-floor-top-pct: 31.714%;
 }
 
 .stage-wall-band {
   position: absolute;
-  left: calc((1 - var(--stage-floor-span)) / 2 * 100%);
-  width: calc(var(--stage-floor-span) * 100%);
+  left: 0;
+  right: 0;
   top: 0;
-  /* STUDIO_UPPER_H / VISIBLE_H — wall band above the floor plane */
-  height: 31.714%;
+  height: var(--stage-floor-top-pct);
   background: var(--stage-wall-top);
 }
 
-/* Floor plane from wall base to bottom of screen.
-   No clipping is applied so perspective continues seamlessly left and right (+1 screen each side). */
+/* Floor host: full stage so the 640×350 SVG viewBox aligns with overlays.
+   Parquet tiles are SVG polygons (studioFloorLayout) — not CSS 3D gradients. */
 .stage-floor {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 31.714%;
-  bottom: 0;
-  overflow: visible;
-  perspective: var(--stage-floor-perspective);
-  perspective-origin: 50% 0%;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-/* Rectangular ceramic grid in 3D perspective.
-   The perspective transformation tapers the grid towards the back wall,
-   naturally matching the side walls angle without clipping or cutting off any tiles.
-   Spans 3× stage width (−1…+1 screens) centered under perspective. */
+.stage-floor-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .stage-floor-tiles {
-  position: absolute;
-  left: calc((1 - var(--stage-floor-span)) / 2 * 100%);
-  width: calc(var(--stage-floor-span) * 100%);
-  top: 0;
-  height: 250%;
-  transform: rotateX(var(--stage-floor-tilt));
-  transform-origin: 50% 0%;
-  backface-visibility: hidden;
-  background-color: var(--stage-floor-base, var(--stage-tile-face));
-  background-position: calc(50% - 1px) 0;
-  background-image:
-    linear-gradient(var(--stage-tile-grout) 2px, transparent 2px),
-    linear-gradient(90deg, var(--stage-tile-grout) 2px, transparent 2px);
-  background-size: 64px 36px;
+  /* stroke color comes from the SVG; keep a CSS hook for theming */
+  stroke: var(--stage-tile-grout);
 }
 
-#legacy-canvas {
+.splash-overlay {
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -257,8 +240,14 @@ body {
   pointer-events: none;
 }
 
-#legacy-canvas[hidden] {
+.splash-overlay[hidden] {
   display: none;
+}
+
+.splash-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Canvas + SVG overlays share one letterboxed stage in fullscreen. */
@@ -271,8 +260,8 @@ body {
   background: #000;
 }
 
-.screen-stack:fullscreen #legacy-canvas,
-.screen-stack:-webkit-full-screen #legacy-canvas,
+.screen-stack:fullscreen .splash-overlay,
+.screen-stack:-webkit-full-screen .splash-overlay,
 .screen-stack:fullscreen .stage-backdrop,
 .screen-stack:-webkit-full-screen .stage-backdrop {
   width: 100%;
@@ -406,6 +395,8 @@ body {
 }
 
 .alphabet-overlay {
+  /* WEB: letter pad replaced the DOS strip — keep mount for tests, never show. */
+  display: none !important;
   position: absolute;
   inset: 0;
   width: 100%;
@@ -488,8 +479,24 @@ body {
   display: none;
 }
 
+.ceremony-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+
+.ceremony-overlay[hidden] {
+  display: none;
+}
+
+
 .yak-overlay svg,
 .adware-overlay svg,
+.ceremony-overlay svg,
 .boxes-overlay svg,
 .players-overlay svg,
 .plate-overlay svg,
@@ -654,6 +661,108 @@ body {
 
 .alpha-tile.vanish-3 .alpha-lift {
   opacity: 0;
+}
+
+/* ------------------------------------------------------------- letter pad */
+/*
+ * Full-screen human letter picker. Grid is 4×8 = 32 (А–Я).
+ * User ask said "4×7", but 4×7=28 cannot hold 32 letters — use 4×8.
+ * Keep this block separate from stage-floor / parquet rules (parallel work).
+ */
+.letter-pad-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 30;
+  pointer-events: auto;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.letter-pad-overlay[hidden] {
+  display: none !important;
+}
+
+.letter-pad {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.35rem, 1.5vh, 0.75rem);
+  margin: clamp(0.35rem, 2vh, 0.9rem);
+  padding: clamp(0.45rem, 2vh, 0.9rem);
+  border-radius: 12px;
+  background: rgba(8, 10, 18, 0.92);
+  border: 1px solid #5a6478;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+.letter-pad-title {
+  margin: 0;
+  text-align: center;
+  color: #f2f5ff;
+  font-family: "PT Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(14px, 3.2vw, 22px);
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+}
+
+.letter-pad-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--letter-pad-cols, 8), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--letter-pad-rows, 4), minmax(0, 1fr));
+  gap: clamp(0.25rem, 1.2vw, 0.55rem);
+  min-height: 0;
+}
+
+.letter-pad-tile {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 1px solid #6a7382;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2a3144 0%, #151a28 55%, #0a0c14 100%);
+  color: #ffffff;
+  font-family: "PT Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: clamp(16px, 5.5vw, 28px);
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.letter-pad-tile:not(.used):hover,
+.letter-pad-tile:not(.used):focus-visible {
+  outline: 2px solid #7ec8ff;
+  outline-offset: 1px;
+  border-color: #9aa7bc;
+}
+
+.letter-pad-tile:not(.used):active {
+  transform: scale(0.97);
+  background: linear-gradient(180deg, #3a4560 0%, #1c2336 100%);
+}
+
+.letter-pad-tile.used,
+.letter-pad-tile:disabled {
+  cursor: default;
+  opacity: 0.28;
+  background: rgba(20, 24, 36, 0.55);
+  border-color: #303848;
+  color: transparent;
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------- touch controls */

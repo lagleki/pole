@@ -5,6 +5,7 @@ import { liveSeat } from './constants';
 import {
   BOX_BRING_IN_FRAMES,
   boxBringIn,
+  boxBringInAt,
   boxClosedPair,
   boxOfsXy,
   boxReveal,
@@ -24,6 +25,12 @@ describe('svg boxes', () => {
     expect(end[1]).toEqual({ kind: 'opened', ...boxOfsXy(tb - 46 * SCREEN_W + 24) });
     expect(end[2]).toEqual({ kind: 'money', ...boxOfsXy(tb - 60 * SCREEN_W + 26) });
     expect(start[0].y).toBeGreaterThan(end[0].y);
+  });
+
+  it('boxBringInAt(0)/At(1) match discrete frame endpoints', () => {
+    const tb = liveSeat(0).talkBubbleOfs;
+    expect(boxBringInAt(tb, 0)).toEqual(boxBringIn(tb, 0));
+    expect(boxBringInAt(tb, 1)).toEqual(boxBringIn(tb, BOX_BRING_IN_FRAMES - 1));
   });
 
   it('shuffles the closed pair and parks the prize on the chosen side', () => {

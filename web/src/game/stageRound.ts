@@ -50,7 +50,7 @@ export interface StageRoundHost {
   resumingBetweenRounds: boolean;
   winnerCarry: WinnerCarry | null;
   setScene(scene: Scene): void;
-  persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: LetterAward, pick?: { letterIdx: number; plusPosition?: number }): void;
+  persistCheckpoint(checkpoint: GameProgressSave['checkpoint'], award?: LetterAward, pick?: { letterIdx?: number; plusPosition?: number; boxChoice?: number; boxWinning?: number }): void;
   drawBoardChrome(): void;
   drawFortuneWheel(a: number): void;
   paintSeatSprite(seatIdx: number, spriteId?: number | null): void;
@@ -59,7 +59,7 @@ export interface StageRoundHost {
   syncPlayers(visible?: boolean): void;
   syncHud(visible?: boolean, blink?: { seat: number; on: boolean }): void;
   syncAlphabet(visible?: boolean): void;
-  syncBoard(visible?: boolean, revealedDuringWalk?: Set<number>, openBeforeWalk?: Set<number>): void;
+  syncBoard(visible?: boolean, revealedDuringWalk?: ReadonlySet<number>, openBeforeWalk?: ReadonlySet<number>): void;
   syncDebug(): void;
   useSvgPlayers(): boolean;
   playSfx(id: SfxId, options?: SfxPlayOptions): void;
@@ -103,7 +103,7 @@ export async function stageSetup(host: StageRoundHost): Promise<void> {
       };
     }
     // Clear every seat visually — winner art/labels from the last round must not linger.
-    for (let i = 0; i <= 2; i += 1) {
+    for (const i of [0, 1, 2] as const) {
       const layout = liveSeat(i);
       host.seats[i].nameBytes = new Uint8Array(0);
       host.seats[i].spriteId = null;
@@ -126,19 +126,13 @@ export async function stageSetup(host: StageRoundHost): Promise<void> {
   }
   host.ctx.hud?.hideBubbles();
 
-  let j = 332 * SCREEN_W + 31 * 20;
   for (let i = 31; i >= 0; i -= 1) {
     host.available[i] = 0x80 + i;
-    if (!host.ctx.alphabet) {
-      s.drawSprite(SPRITE.LETTER_BACK0, j, 8);
-    }
-    j -= 20;
   }
-  if (host.ctx.alphabet) {
-    host.syncAlphabet(true);
-  } else {
-    s.print(host.available, 334 * SCREEN_W + 4, 0, 14, 20);
+  if (!host.ctx.alphabet) {
+    throw new Error('alphabet view required (SVG scene graph)');
   }
+  host.syncAlphabet(false);
 
   // dpr:1034 — seats stay empty until presentation reveals them one by one.
   host.drawFortuneWheel(host.curSector);
@@ -260,7 +254,7 @@ export async function presentation(host: StageRoundHost): Promise<void> {
       const nameOfs = hud ? BACKBUF + SCREEN_W * 14 : layout.labelOfs + SCREEN_W * 14;
       const entry = input.beginTextEntry(10, nameOfs, 8);
       const pollName = hud
-        ? window.setInterval(() => {
+        ? globalThis.setInterval(() => {
             hud.setNameEntry({
               seat: j,
               text: decodeCp866(new Uint8Array(entry.bytes)),
@@ -273,7 +267,7 @@ export async function presentation(host: StageRoundHost): Promise<void> {
         input.waitEnter(INFINITE),
       ]);
       if (hud) {
-        window.clearInterval(pollName);
+        globalThis.clearInterval(pollName);
         hud.setNameEntry(null);
       }
       input.endTextEntry();
@@ -328,7 +322,6 @@ export async function presentation(host: StageRoundHost): Promise<void> {
  * dpr:1091-1105 (selection + blank paint); announcement stays in selectWord.
  */
 export function chooseRoundWord(host: StageRoundHost): OvlQuestion {
-  const s = host.screen;
   const { questions } = host.ctx;
   const used = host.prevWords.slice(0, host.stage);
   const curWord = pickQuestionIndex(questions.length, used, (n) => host.random(n));
@@ -342,13 +335,10 @@ export function chooseRoundWord(host: StageRoundHost): OvlQuestion {
   host.opened = prepared.opened;
   host.ctx.state.theme = prepared.theme;
   host.wordPos = prepared.wordPos;
-  if (host.ctx.board) {
-    host.syncBoard(true);
-  } else {
-    for (let i = host.remaindLetters - 1; i >= 0; i -= 1) {
-      s.fillRect((i << 4) + host.wordPos + 11 * SCREEN_W, 19, 14, 8);
-    }
+  if (!host.ctx.board) {
+    throw new Error('board view required (SVG scene graph)');
   }
+  host.syncBoard(true);
   host.syncDebug();
   return prepared.question;
 }

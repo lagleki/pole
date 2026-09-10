@@ -39,7 +39,17 @@ export function boxOfsXy(ofs: number): { x: number; y: number } {
   return { x: ofs % SCREEN_W, y: Math.floor(ofs / SCREEN_W) };
 }
 
-/** frame 0 = start below the seat, frame 30 = landed (dpr:1133-1148). */
+/**
+ * Pure bring-in pose for progress t∈[0,1] (WEB scene graph).
+ * t=0 start below the seat; t=1 landed (dpr:1133-1148 / DIFF #19).
+ */
+export function boxBringInAt(talkBubbleOfs: number, t: number): BoxSprite[] {
+  const u = Math.max(0, Math.min(1, t));
+  const frame = Math.round(u * (BOX_BRING_IN_FRAMES - 1));
+  return boxBringIn(talkBubbleOfs, frame);
+}
+
+/** Discrete frame 0..30 (tests / animateFrames). Prefer {@link boxBringInAt}. */
 export function boxBringIn(talkBubbleOfs: number, frame: number): BoxSprite[] {
   const clamped = Math.max(0, Math.min(BOX_BRING_IN_FRAMES - 1, frame));
   const j = talkBubbleOfs + (60 - 2 * clamped) * SCREEN_W;

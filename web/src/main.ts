@@ -26,9 +26,12 @@ import { mountSvgBoard } from './game/svgBoard';
 import { mountSvgHud } from './game/svgHud';
 import { mountSvgAssist } from './game/svgAssist';
 import { mountSvgHand } from './game/svgHand';
+import { mountLetterPad } from './game/svgLetterPad';
 import { mountSvgAdware } from './game/svgAdware';
 import { mountSvgYakubovich } from './game/svgYakubovich';
 import { mountSvgBoxes } from './game/svgBoxes';
+import { mountSvgCeremony } from './game/svgCeremony';
+import { mountSvgSplash } from './game/svgSplash';
 import { mountSvgPlayers } from './game/svgPlayers';
 import { mountSvgStudio, mountStageBackdrop, restoredBrickKinds } from './game/svgStudio';
 import { mountSvgWheel } from './game/svgWheel';
@@ -100,7 +103,7 @@ app.innerHTML = `
       <div class="crt-frame">
         <div id="screen-stack" class="screen-stack">
           <div id="stage-backdrop" class="stage-backdrop" aria-hidden="true"></div>
-          <canvas id="legacy-canvas" width="640" height="350" hidden aria-label="Заставка и финальные экраны"></canvas>
+          <div id="splash-overlay" class="splash-overlay" hidden aria-label="Заставка"></div>
           <div id="studio-overlay" class="studio-overlay" hidden></div>
           <div id="board-overlay" class="board-overlay" hidden></div>
           <div id="assist-overlay" class="assist-overlay" hidden></div>
@@ -115,7 +118,9 @@ app.innerHTML = `
           <div id="hud-overlay" class="hud-overlay" hidden></div>
           <div id="boxes-overlay" class="boxes-overlay" hidden></div>
           <div id="adware-overlay" class="adware-overlay" hidden></div>
+          <div id="ceremony-overlay" class="ceremony-overlay" hidden></div>
           <div id="hand-overlay" class="hand-overlay" hidden></div>
+          <div id="letter-pad-overlay" class="letter-pad-overlay" hidden></div>
           <div id="supergame-overlay" class="supergame-overlay" hidden></div>
           <button id="audio-gate" class="audio-gate" type="button">
             Коснитесь экрана, чтобы включить звук
@@ -204,7 +209,7 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
-const legacyCanvas = requireElement<HTMLCanvasElement>('#legacy-canvas');
+const splashOverlay = requireElement<HTMLDivElement>('#splash-overlay');
 const stageBackdrop = requireElement<HTMLDivElement>('#stage-backdrop');
 const screenStack = requireElement<HTMLDivElement>('#screen-stack');
 mountStageBackdrop(stageBackdrop);
@@ -216,6 +221,7 @@ const playersOverlay = requireElement<HTMLDivElement>('#players-overlay');
 const plateOverlay = requireElement<HTMLDivElement>('#plate-overlay');
 const yakOverlay = requireElement<HTMLDivElement>('#yak-overlay');
 const adwareOverlay = requireElement<HTMLDivElement>('#adware-overlay');
+const ceremonyOverlay = requireElement<HTMLDivElement>('#ceremony-overlay');
 const boxesOverlay = requireElement<HTMLDivElement>('#boxes-overlay');
 const wheelOverlay = requireElement<HTMLDivElement>('#wheel-overlay');
 const alphabetOverlay = requireElement<HTMLDivElement>('#alphabet-overlay');
@@ -223,6 +229,7 @@ const hudOverlay = requireElement<HTMLDivElement>('#hud-overlay');
 const assistOverlay = requireElement<HTMLDivElement>('#assist-overlay');
 const wallsOverlay = requireElement<HTMLDivElement>('#walls-overlay');
 const handOverlay = requireElement<HTMLDivElement>('#hand-overlay');
+const letterPadOverlay = requireElement<HTMLDivElement>('#letter-pad-overlay');
 const supergameOverlay = requireElement<HTMLDivElement>('#supergame-overlay');
 const wheelPegs = requireElement<HTMLDivElement>('#wheel-pegs');
 const tabPlayBtn = requireElement<HTMLButtonElement>('#tab-play');
@@ -257,9 +264,12 @@ const svgHud = mountSvgHud(plateOverlay, hudOverlay);
 const svgPlayers = mountSvgPlayers(playersOverlay);
 const svgYak = mountSvgYakubovich(yakOverlay);
 const svgAdware = mountSvgAdware(adwareOverlay);
+const svgCeremony = mountSvgCeremony(ceremonyOverlay);
+const svgSplash = mountSvgSplash(splashOverlay);
 const svgBoxes = mountSvgBoxes(boxesOverlay);
 const svgAssist = mountSvgAssist(assistOverlay);
 const svgHand = mountSvgHand(handOverlay);
+const letterPad = mountLetterPad(letterPadOverlay);
 const svgSupergameHud = mountSupergameHud(supergameOverlay);
 
 // ------------------------------------------------------------ session state
@@ -471,6 +481,8 @@ function loadSvgSpriteArt(): void {
   svgPlayers.loadSprites(sprites, palette);
   svgYak.loadSprites(sprites, palette);
   svgAdware.loadSprites(sprites, palette);
+  svgCeremony.loadSprites(sprites, palette);
+  svgSplash.loadSprites(sprites, palette);
   svgBoxes.loadSprites(sprites, palette);
 }
 
@@ -542,17 +554,12 @@ async function gameLoop(): Promise<void> {
     currentRun = { controller, input, audio, state };
     loadSvgSpriteArt();
 
-    const presenter = new CanvasPresenter(
-      screen,
-      legacyCanvas,
-      defaultRenderSpec.palette,
-      () => input.textEntry,
-      () => {
-        const hand = input.hand;
-        const handActive = hand.step === 16 || hand.step === 20;
-        svgHand.sync(handActive, hand.ofs);
-      },
-    );
+    const presenter = new CanvasPresenter(() => {
+      const hand = input.hand;
+      // step 16 = ПЛЮС board pick; letter pick uses letterPad (no hand).
+      const handActive = hand.step === 16;
+      svgHand.sync(handActive, hand.ofs);
+    });
     presenter.start();
 
     const resume = persistEnabled ? loadProgress() : null;
@@ -579,10 +586,13 @@ async function gameLoop(): Promise<void> {
         yak: svgYak,
         boxes: svgBoxes,
         adware: svgAdware,
+        ceremony: svgCeremony,
+        splash: svgSplash,
         alphabet: svgAlphabet,
         hud: svgHud,
         players: svgPlayers,
         hand: svgHand,
+        letterPad,
         supergameHud: svgSupergameHud,
         present: presenter,
         persist: persistEnabled
@@ -613,7 +623,10 @@ async function gameLoop(): Promise<void> {
       svgYak.setVisible(false);
       svgBoxes.setVisible(false);
       svgAdware.setVisible(false);
+      svgSplash.setVisible(false);
+      svgCeremony.setVisible(false);
       svgHand.setVisible(false);
+      letterPad.hide();
       svgSupergameHud.hidePrizes();
       svgSupergameHud.hideTimer();
       svgSupergameHud.setVisible(false);

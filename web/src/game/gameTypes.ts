@@ -10,9 +10,12 @@ import type { BoardView } from './svgBoard';
 import type { HudView } from './svgHud';
 import type { AssistView } from './svgAssist';
 import type { HandView } from './svgHand';
+import type { LetterPadView } from './svgLetterPad';
 import type { AdwareView } from './svgAdware';
 import type { YakView } from './svgYakubovich';
 import type { BoxesView } from './svgBoxes';
+import type { CeremonyView } from './svgCeremony';
+import type { SplashView } from './svgSplash';
 import type { PlayersView } from './svgPlayers';
 import type { StudioView } from './svgStudio';
 import type { WheelView } from './svgWheel';
@@ -110,6 +113,10 @@ export interface GameContext {
   boxes?: BoxesView;
   /** SVG commercial-break plaque over the host (DIFF #19). */
   adware?: AdwareView;
+  /** SVG prize / endgame / top-8 ceremony (DIFF #19). */
+  ceremony?: CeremonyView;
+  /** SVG splash / intro (DIFF #19). */
+  splash?: SplashView;
   /** SVG alphabet strip (DIFF #19). */
   alphabet?: AlphabetView;
   /** SVG nameplates, money stacks, speech bubbles (DIFF #19). */
@@ -127,9 +134,11 @@ export interface GameContext {
   tts?: HostTts;
   /** TV-show samples (DIFF #25). Tests omit this and keep PWM. */
   sfx?: GameSfx;
-  /** SVG pointing hand (alphabet row + board). Tests omit and keep canvas HAND. */
+  /** SVG pointing hand (board / plus-sector position pick). Letter pick uses letterPad. */
   hand?: HandView;
-  /** Browser presenter: SVG studio vs legacy-canvas splash/prize/endgame. */
+  /** Full-screen clickable А–Я pad for human letter pick (4×8). */
+  letterPad?: LetterPadView;
+  /** Browser frame loop (hand cursor sync). Legacy canvas mode removed. */
   present?: PlayPresenter;
   /** Supergame prize list + think timer (DIFF #31). */
   supergameHud?: SupergameHudView;

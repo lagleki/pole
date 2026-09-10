@@ -63,19 +63,23 @@ describe('svg studio', () => {
     expect(BRICK_COLS).toBe(12);
   });
 
-  it('defines floor boundaries from wall inner bases and screen bottom corners', () => {
+  it('defines floor boundaries from board wall with widened perspective sides', () => {
     const clip = stageFloorClipPercents();
-    expect(clip.topLeft).toEqual({ x: (WALL_W / 640) * 100, y: (WALL_BOT / 350) * 100 });
-    expect(clip.topRight).toEqual({ x: ((640 - WALL_W) / 640) * 100, y: (WALL_BOT / 350) * 100 });
-    expect(clip.bottomLeft).toEqual({ x: 0, y: 100 });
-    expect(clip.bottomRight).toEqual({ x: 100, y: 100 });
+    expect(clip.topLeft.y).toBe((FLOOR_BACK_Y / 350) * 100);
+    expect(clip.topRight.y).toBe((FLOOR_BACK_Y / 350) * 100);
+    expect(FLOOR_BACK_Y).toBe(111);
+    expect(FLOOR_BACK_LEFT_X).toBeLessThan(WALL_W);
+    expect(FLOOR_BACK_RIGHT_X).toBeGreaterThan(640 - WALL_W);
+    expect(clip.bottomLeft.x).toBeLessThan(0);
+    expect(clip.bottomRight.x).toBeGreaterThan(100);
+    expect(clip.bottomLeft.y).toBe(100);
+    expect(clip.bottomRight.y).toBe(100);
     expect(stageFloorClipPath()).toContain('polygon(');
-    expect(FLOOR_BACK_LEFT_X).toBe(WALL_W);
-    expect(FLOOR_BACK_RIGHT_X).toBe(640 - WALL_W);
-    expect(FLOOR_BACK_Y).toBe(WALL_BOT);
     const markup = stageBackdropMarkup();
     expect(markup).toContain('stage-floor-tiles');
+    expect(markup).toContain('stage-floor-svg');
     expect(markup).toContain('stage-wall-band');
+    expect(markup).toContain('stage-floor-tile');
     expect(buildStageBackdropSvg()).toBe(markup);
   });
 

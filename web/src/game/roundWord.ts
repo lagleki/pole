@@ -8,7 +8,7 @@ import { encodeCp866 } from '../encoding/cp866';
 import { SCREEN_W } from '../engine/types';
 import { ALPHABET_LEN, TOURNAMENT_ROUNDS } from './constants';
 import type { LetterAward } from './letterAward';
-import { WORD_CELL_WIDTH } from './assistantWalk';
+import { WORD_CELL_WIDTH } from './boardLetters';
 
 /** Blank / used alphabet slot (space). */
 const ALPHA_USED = 0x20;
@@ -152,9 +152,10 @@ export function nearestAvailableLetter(
 }
 
 export function firstAvailableLetter(available: Uint8Array): number {
-  let startIdx = 0;
-  while (startIdx < ALPHABET_LEN && isUsedAlphabet(available, startIdx)) {
-    startIdx += 1;
+  for (let startIdx = 0; startIdx < ALPHABET_LEN; startIdx += 1) {
+    if (!isUsedAlphabet(available, startIdx)) {
+      return startIdx;
+    }
   }
-  return startIdx;
+  return ALPHABET_LEN;
 }

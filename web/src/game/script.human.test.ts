@@ -8,6 +8,7 @@ import { VirtualClock } from '../engine/timing';
 import type { Machine } from '../engine/types';
 import type { HostTts, TtsRole } from '../engine/tts';
 import { createDebugState, runGame, type GameContext, type Scene } from './script';
+import { attachSceneFakes, fakeLetterPad, type FakeLetterPad } from './testSceneViews';
 import { fonts, lib, ovl, pic } from './testAssets';
 import { WHEEL_SECTORS } from './tvWheel';
 
@@ -17,6 +18,7 @@ interface Harness {
   input: GameInput;
   ctx: GameContext;
   sceneHistory: Scene[];
+  letterPad: FakeLetterPad;
 }
 
 function buildHarness(seed: number): Harness {
@@ -53,7 +55,11 @@ function buildHarness(seed: number): Harness {
     // rely on the empty-name → NPC fallback for seat 2.
     options: { humanSeats: 2 },
   };
-  return { controller, clock, input, ctx, sceneHistory };
+  attachSceneFakes(ctx);
+  // Controllable pad so the driver can see scene === 'letter-pick' before choose().
+  const letterPad = fakeLetterPad({ auto: false });
+  ctx.letterPad = letterPad;
+  return { controller, clock, input, ctx, sceneHistory, letterPad };
 }
 
 function recordingTts(): { tts: HostTts; lines: Array<{ text: string; role: TtsRole }> } {
@@ -110,7 +116,8 @@ interface DriveLog {
  * Scene-aware driver: makes seat 1 human (name ТЕСТ), then plays per policy.
  * Human decisions: Space at hand.ofs=4 → 'Кручу барабан'; ArrowLeft to 0 then
  * Space → 'Скажу слово'. Box game (DIFF #30): same hold-Space poll as the
- * turn hand ('Правая'). Letter pick: Space, ArrowRight past used letters.
+ * turn hand ('Правая'). Letter pick: fakeLetterPad auto-picks first available
+ * (no hand cursor). ПЛЮС position pick still uses hand step 16 + Space.
  */
 async function drive(h: Harness, policy: DrivePolicy, until: (log: DriveLog) => boolean, maxIterations = 12000): Promise<DriveLog> {
   let finished = false;
@@ -220,28 +227,38 @@ async function drive(h: Harness, policy: DrivePolicy, until: (log: DriveLog) => 
     }
 
     if (state.scene === 'letter-pick' && humanTurn) {
-      // Alphabet (step 20) and ПЛЮС position pick (step 16): hold Space, and
-      // skip cells whose letter is already used.
-      if (pendingLetterTurn === null && h.input.hand.step === 20) {
-        pendingLetterTurn = {
-          reaction: state.currentSector,
-          scoreBefore: state.seats[state.currentPlayer].score,
-          openedBefore: state.opened.filter(Boolean).length,
-        };
-        log.humanLetterPicks += 1;
+      // Alphabet pad (choose) vs ПЛЮС board hand (step 16 + Space).
+      const plusPick = h.input.hand.step === 16;
+      if (plusPick) {
+        if (state.usedLetters.length === lastUsedCount) {
+          stuckLetterIters += 1;
+        } else {
+          stuckLetterIters = 0;
+          lastUsedCount = state.usedLetters.length;
+        }
+        if (stuckLetterIters > 3) {
+          tap(h, 'ArrowRight');
+          stuckLetterIters = 0;
+          await flush();
+        }
+        await holdSpace(h, 60);
+        continue;
       }
-      if (state.usedLetters.length === lastUsedCount) {
-        stuckLetterIters += 1;
+      if (h.letterPad.isOpen()) {
+        if (pendingLetterTurn === null) {
+          pendingLetterTurn = {
+            reaction: state.currentSector,
+            scoreBefore: state.seats[state.currentPlayer].score,
+            openedBefore: state.opened.filter(Boolean).length,
+          };
+          log.humanLetterPicks += 1;
+        }
+        h.letterPad.choose();
+        await flush();
       } else {
-        stuckLetterIters = 0;
-        lastUsedCount = state.usedLetters.length;
-      }
-      if (stuckLetterIters > 3) {
-        tap(h, 'ArrowRight');
-        stuckLetterIters = 0;
+        await h.clock.advance(60);
         await flush();
       }
-      await holdSpace(h, 60);
       continue;
     }
 

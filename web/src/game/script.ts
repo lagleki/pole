@@ -20,7 +20,11 @@ import {
 } from './svgStudio';
 import { basketTotal, type SupergamePrize } from './supergamePrizes';
 
-import { assistantOpenWalk as runAssistantOpenWalk, type AssistantWalkOptions } from './assistantWalk';
+import {
+  assistantOpenWalk as runAssistantOpenWalk,
+  type AssistStop,
+  type AssistantWalkOptions,
+} from './assistantWalk';
 import type { LetterAward } from './letterAward';
 import {
   stageSetup as runStageSetup,
@@ -41,6 +45,14 @@ import {
   type SupergameFlowHost,
 } from './supergameFlow';
 import { adware as runAdware, type AdwareFlowHost } from './adwareFlow';
+import { ENDGAME_LAYOUT, TOP8_I0, type CeremonyLine } from './svgCeremony';
+import {
+  SPLASH_TIMING,
+  SPLASH_TITLE_LETTERS,
+  splashHStripeColumns,
+  splashVStripeRows,
+} from './svgSplash';
+import { animateFrames } from './tween';
 import {
   yakubovichSetSilent as runYakubovichSetSilent,
   yakubovichTalk as runYakubovichTalk,
@@ -126,6 +138,7 @@ class Game {
   /** WEB: resume straight to letter-pick (spin already done). */
   private resumeAtLetterPick: { awardKind: 'perHit' | 'double' | 'keep'; awardUnit: number } | null = null;
   /** WEB: resume with letter already chosen (no re-pick / re-spin). */
+  private resumeAtBoxChosen: { choice: number; winning: number } | null = null;
   private resumeAtLetterOpen: {
     awardKind: 'perHit' | 'double' | 'keep';
     awardUnit: number;
@@ -173,13 +186,6 @@ class Game {
 
   private setScene(scene: Scene): void {
     this.ctx.state.scene = scene;
-    const legacy =
-      scene === 'splash' ||
-      scene === 'prize' ||
-      scene === 'endgame' ||
-      scene === 'top-players' ||
-      scene === 'done';
-    this.ctx.present?.setMode(legacy ? 'legacy' : 'svg');
     this.syncDebug();
   }
 
@@ -298,6 +304,8 @@ class Game {
     this.ctx.studio?.setVisible(false);
     this.ctx.boxes?.setVisible(false);
     this.ctx.adware?.setVisible(false);
+    this.ctx.ceremony?.setVisible(false);
+    this.ctx.splash?.setVisible(false);
   }
 
   private syncBoard(
@@ -327,20 +335,13 @@ class Game {
     studio.setVisible(visible);
   }
 
-  private letterIndexAtAssist(assistOfs: number): number {
-    const assistStandShift = ((25 - 16) >> 1);
-    const cellOfs = assistOfs + assistStandShift + 11 * SCREEN_W;
-    return (cellOfs - this.wordPos - 11 * SCREEN_W) >> 4;
-  }
-
   private wordBoardCells(
     entryBytes?: Uint8Array,
     revealedDuringWalk?: ReadonlySet<number>,
     openBeforeWalk?: ReadonlySet<number>,
   ): BoardWordCell[] {
-    const len = this.guessedWord.length;
     const cells: BoardWordCell[] = [];
-    for (let i = 0; i < len; i += 1) {
+    for (const [i] of this.guessedWord.entries()) {
       if (entryBytes && i < entryBytes.length) {
         cells.push({
           letter: decodeCp866(entryBytes.subarray(i, i + 1)),
@@ -361,13 +362,14 @@ class Game {
     return cells;
   }
 
-  private syncAlphabet(visible = true): void {
+  private syncAlphabet(_visible = true): void {
+    // WEB: letter pick uses the mobile letter pad; the DOS alphabet strip is retired.
     const alphabet = this.ctx.alphabet;
     if (!alphabet) {
       return;
     }
     alphabet.setAvailable(this.available);
-    alphabet.setVisible(visible);
+    alphabet.setVisible(false);
   }
 
   private syncHud(visible = true, blink?: { seat: number; on: boolean }): void {
@@ -413,9 +415,9 @@ class Game {
     );
   }
 
-  /** SVG seats whenever the overlay exists, except the prize framebuffer scene. */
+  /** SVG seats whenever the overlay exists. */
   private useSvgPlayers(): boolean {
-    return Boolean(this.ctx.players) && this.ctx.state.scene !== 'prize';
+    return Boolean(this.ctx.players);
   }
 
   /** Blit or SVG-sync one seat sprite (null clears). */
@@ -449,7 +451,7 @@ class Game {
   private persistCheckpoint(
     checkpoint: GameProgressSave['checkpoint'],
     award?: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' },
-    pick?: { letterIdx: number; plusPosition?: number },
+    pick?: { letterIdx?: number; plusPosition?: number; boxChoice?: number; boxWinning?: number },
   ): void {
     if (!this.ctx.persist) {
       return;
@@ -484,8 +486,10 @@ class Game {
       topPlayers: this.ctx.topPlayers.map((row) => ({ ...row })),
       ...(award !== undefined && { awardKind: award.kind, awardUnit: award.kind === 'perHit' ? award.unit : undefined }),
       ...(pick !== undefined && {
-        pickedLetterIdx: pick.letterIdx,
+        ...(pick.letterIdx !== undefined && { pickedLetterIdx: pick.letterIdx }),
         ...(pick.plusPosition !== undefined && { plusPosition: pick.plusPosition }),
+        ...(pick.boxChoice !== undefined && { boxChoice: pick.boxChoice }),
+        ...(pick.boxWinning !== undefined && { boxWinning: pick.boxWinning }),
       }),
     });
   }
@@ -531,8 +535,12 @@ class Game {
       save.checkpoint === 'after-spin' ||
       save.checkpoint === 'letter-pick' ||
       save.checkpoint === 'letter-open' ||
+      save.checkpoint === 'box-chosen' ||
       save.checkpoint === 'word-solved';
     this.resumeAfterSpin = save.checkpoint === 'after-spin';
+    this.resumeAtBoxChosen = save.checkpoint === 'box-chosen'
+      ? { choice: save.boxChoice ?? 0, winning: save.boxWinning ?? 0 }
+      : null;
     this.resumeAtLetterPick = save.checkpoint === 'letter-pick'
       ? { awardKind: save.awardKind ?? 'keep', awardUnit: save.awardUnit ?? 0 }
       : null;
@@ -607,21 +615,8 @@ class Game {
   }
 
   private paintAlphabetRow(): void {
-    const alphabet = this.ctx.alphabet;
-    if (alphabet) {
-      this.syncAlphabet(true);
-      return;
-    }
-    const s = this.screen;
-    let j = 332 * SCREEN_W + 31 * 20;
-    for (let i = 31; i >= 0; i -= 1) {
-      s.drawSprite(SPRITE.LETTER_BACK0, j, 8);
-      if (this.available[i] === 0x20) {
-        s.fillRect(0x14c * SCREEN_W + i * 20, 18, 19, 7);
-      }
-      j -= 20;
-    }
-    s.print(this.available, 334 * SCREEN_W + 4, 0, 14, 20);
+    // Keep availability in sync for any leftover consumers; never show the strip.
+    this.syncAlphabet(false);
   }
 
   private paintWordBoard(): void {
@@ -759,6 +754,8 @@ class Game {
       set resumeAfterSpin(v) { g.resumeAfterSpin = v; },
       get resumeAtLetterPick() { return g.resumeAtLetterPick as PlayerTurnHost['resumeAtLetterPick']; },
       set resumeAtLetterPick(v) { g.resumeAtLetterPick = v; },
+      get resumeAtBoxChosen() { return g.resumeAtBoxChosen; },
+      set resumeAtBoxChosen(v) { g.resumeAtBoxChosen = v; },
       get resumeAtLetterOpen() { return g.resumeAtLetterOpen as PlayerTurnHost['resumeAtLetterOpen']; },
       set resumeAtLetterOpen(v) { g.resumeAtLetterOpen = v; },
       setScene: (scene) => g.setScene(scene),
@@ -780,11 +777,10 @@ class Game {
       isHuman: (i) => g.isHuman(i),
       playerName: (i) => g.playerName(i),
       wordBoardCells: (entry, revealed, openBefore) => g.wordBoardCells(entry, revealed, openBefore),
-      letterIndexAtAssist: (ofs) => g.letterIndexAtAssist(ofs),
       snapshotRoundToBackbuf: () => g.snapshotRoundToBackbuf(),
       inSupergameSolve: () => g.inSupergameSolve(),
       spinWheel: () => g.spinWheel(),
-      assistantOpenWalk: (pos, hits, openAt, opts) => g.assistantOpenWalk(pos, hits, openAt, opts),
+      assistantOpenWalk: (stops, openAt, opts) => g.assistantOpenWalk(stops, openAt, opts),
       pickLetter: () => g.pickLetter(),
       openLetter: (idx, n, award) => g.openLetter(idx, n, award),
       assistantRevealRemainingLetters: (opts) => g.assistantRevealRemainingLetters(opts),
@@ -907,13 +903,18 @@ class Game {
 
   // ----------------------------------------------------------------- scenes
 
-  /** dpr:869-947. WEB: click/Space aborts the intro and jumps to the studio. */
+  /** dpr:869-947. WEB: SVG splash; click/Space aborts the intro and jumps to the studio. */
   private async splash(): Promise<void> {
     this.setScene('splash');
     this.hideWheel();
+    const splash = this.ctx.splash;
+    if (!splash) {
+      throw new Error('splash view required (SVG scene graph)');
+    }
+    splash.reset();
+    splash.setVisible(true);
     this.playSfx('openingOld');
     this.playSfx('opening');
-    const s = this.screen;
 
     const skipIntro = async (timeoutMs: number): Promise<boolean> => {
       if (!(await this.waitKey(timeoutMs))) {
@@ -921,112 +922,69 @@ class Game {
       }
       this.stopSfx('opening');
       this.stopSfx('openingOld');
+      splash.setVisible(false);
       return true;
     };
 
-    let j = 0x159 * SCREEN_W + 20;
-    let k = 0x26c - 20;
-    for (let i = 0; i <= 0xa0; i += 1) {
-      s.fillChar(j, k, 7);
-      j -= 639;
-      k -= 2;
-      if (await skipIntro(10)) {
+    for (let i = 0; i < SPLASH_TIMING.wipeFrames; i += 1) {
+      splash.setWipeFrame(i);
+      if (await skipIntro(SPLASH_TIMING.wipeFrameMs)) {
         return;
       }
     }
-    if (await skipIntro(500)) {
+    if (await skipIntro(SPLASH_TIMING.afterWipeMs)) {
       return;
     }
 
-    j = 185 * SCREEN_W + 180;
-    k = 280;
-    for (let i = 0; i <= 0xa0; i += 1) {
-      s.fillChar(j, k, 7);
-      s.line(20, 345, 180 - i, 185 - i);
-      s.line(460 + i, 185 - i, 620, 345);
-      j -= 641;
-      k += 2;
-      if (await skipIntro(10)) {
+    for (let i = 0; i < SPLASH_TIMING.vLineFrames; i += 1) {
+      splash.setVLineFrame(i);
+      if (await skipIntro(SPLASH_TIMING.vLineFrameMs)) {
         return;
       }
     }
 
-    j = 25 * SCREEN_W + 20;
-    do {
-      k = j;
-      for (let i = 0; i <= 8; i += 1) {
-        s.fillRect(k, 3, 10, 4);
-        k += 40 * SCREEN_W;
-      }
-      if (await skipIntro(10)) {
+    const hCols = splashHStripeColumns();
+    for (let c = 0; c < hCols.length; c += 1) {
+      splash.addHStripeColumn(c);
+      if (await skipIntro(SPLASH_TIMING.hStripeFrameMs)) {
         return;
       }
-      j += 10;
-    } while (j <= 25 * SCREEN_W + 610);
+    }
 
-    j = 25 * SCREEN_W + 19;
-    do {
-      k = j;
-      for (let i = 0; i <= 12; i += 1) {
-        s.fillRect(k, 8, 3, 4);
-        k += 50;
-      }
-      if (await skipIntro(10)) {
+    const vRows = splashVStripeRows();
+    for (let r = 0; r < vRows.length; r += 1) {
+      splash.addVStripeRow(r);
+      if (await skipIntro(SPLASH_TIMING.vStripeFrameMs)) {
         return;
       }
-      j += 8 * SCREEN_W;
-    } while (j <= 337 * SCREEN_W + 19);
+    }
 
-    if (await skipIntro(2500)) {
+    if (await skipIntro(SPLASH_TIMING.afterStripesMs)) {
       return;
     }
-    s.drawSprite(SPRITE.LOGO_POLE, 60 * SCREEN_W + 0x5a, 7);
-    s.drawSprite(SPRITE.LOGO_CHUDES, 60 * SCREEN_W + 0x118, 7);
-    if (await skipIntro(2500)) {
+    splash.showLogos();
+    if (await skipIntro(SPLASH_TIMING.afterLogosMs)) {
       return;
     }
 
-    const title = encodeCp866(' КАПИТАЛШОУ ');
-    j = 0;
-    k = 0xee * SCREEN_W - 15;
-    for (let i = 1; i <= 12; i += 1) {
-      const ch = title.subarray(i - 1, i);
-      k += 50;
-      if (i === 9) {
-        k += 15;
-      }
-      s.print(ch, k - 641, 0, 14, 8);
-      s.print(ch, k - 639, 0, 14, 8);
-      s.print(ch, k + 639, 0, 14, 8);
-      s.print(ch, k + 641, 0, 14, 8);
-      s.print(ch, k + 640 + 639, 0, 14, 8);
-      s.print(ch, k + 640 + 641, 0, 14, 8);
-      s.print(ch, k, 15, 14, 8);
-      s.print(ch, k + 640, 15, 14, 8);
-      j += 100;
-      await this.m.audio.sound(j, 10);
-      if (await skipIntro(250)) {
+    for (let i = 1; i <= SPLASH_TITLE_LETTERS.length; i += 1) {
+      splash.setTitleLetters(i);
+      await this.m.audio.sound(i * SPLASH_TIMING.titleBeepStepHz, SPLASH_TIMING.titleBeepMs);
+      if (await skipIntro(SPLASH_TIMING.titleLetterMs)) {
         return;
       }
     }
 
-    s.print('Сделал Дима Башуров из Арзамаса-16 (E-Mail: 0669@RFNC.NNOV.SU )', 2 * SCREEN_W + 0x44, 7, 8, 8);
-    s.print('Телефон в Арзамасе-16: (83130) 5-92-73', 12 * SCREEN_W + 0xb0, 7, 8, 8);
-    s.print('Посвящается друзьям', 0x1b * SCREEN_W + 0x50, 0, 14, 0x19);
-    s.print('Посвящается друзьям', 0x1c * SCREEN_W + 0x50, 0, 14, 0x19);
-    s.fillRect(0x6040 * 8, 0x46, SCREEN_W, 0);
-    s.print('СПРАВКА: Для перемещения своей руки использйте клавиши со стрелками или', 0x136 * SCREEN_W + 0x1b, 7, 8, 8);
-    s.print('"мышку". Ввод осуществляется нажатием на клавишу ПРОБЕЛ или на', 0x140 * SCREEN_W + 0x63, 7, 8, 8);
-    s.print('левую кнопку"мышки". Нажатие <Ctrl+S> включает/выключает звук,', 0x14a * SCREEN_W + 0x63, 7, 8, 8);
-    s.print('если пришел начальник, нажми клавишу TAB, ESC - выход из игры!', 0x154 * SCREEN_W + 0x63, 7, 8, 8);
+    splash.showCredits();
     if (await skipIntro(INFINITE)) {
       return;
     }
+    splash.setVisible(false);
   }
 
   /** dpr:955-982 — one-time background, bricks, lamps, character shuffle. */
   private drawStaticBackground(): void {
-    this.ctx.present?.setMode('svg');
+    this.ctx.splash?.setVisible(false);
     const kinds = restoredBrickKinds();
     for (let i = BRICK_COUNT - 1; i >= 0; i -= 1) {
       kinds[i] = this.random(3);
@@ -1120,13 +1078,11 @@ class Game {
   /**
    * Assistant card-open walk: enter from the RIGHT, open stops RIGHT→LEFT,
    * then after the last needed card exit back to the RIGHT (not across to the left).
-   * `assistPos[1..hits]` must list stops left→right so assistPos[hits] is the
-   * rightmost card (opened first while walking left).
+   * `stops` is left→right; the walker opens the rightmost first.
    */
   private async assistantOpenWalk(
-    assistPos: readonly number[],
-    hits: number,
-    openAtStop: (stopK: number) => void,
+    stops: readonly AssistStop[],
+    openAtStop: (stop: AssistStop) => void,
     opts?: AssistantWalkOptions,
   ): Promise<void> {
     await runAssistantOpenWalk(
@@ -1139,8 +1095,7 @@ class Game {
         delay: (ms) => this.delay(ms),
         random: (n) => this.random(n),
       },
-      assistPos,
-      hits,
+      stops,
       openAtStop,
       opts,
     );
@@ -1155,9 +1110,9 @@ class Game {
   private async openLetter(
     letterIdx: number,
     n: number,
-    award: { kind: 'perHit'; unit: number } | { kind: 'double' } | { kind: 'keep' },
+    award: LetterAward,
   ): Promise<boolean> {
-    return await runOpenLetter(this.flowHost(), letterIdx, n, award as LetterAward);
+    return await runOpenLetter(this.flowHost(), letterIdx, n, award);
   }
 
 
@@ -1200,26 +1155,23 @@ class Game {
   }
 
 
-  /** dpr:1558-1646 */
+  /** dpr:1558-1646. WEB: CeremonyView stage + top-8 rise via animateFrames. */
   private async endgame(): Promise<void> {
-    const s = this.screen;
-    const seat = this.seats[this.curPlayer];
+    const seat = this.seats[this.curPlayer]!;
     const name = decodeCp866(seat.nameBytes);
     this.hideWheel();
+
+    const ceremony = this.ctx.ceremony;
+    if (!ceremony) {
+      throw new Error('ceremony view required (SVG scene graph)');
+    }
 
     if (this.winner < 3) {
       this.setScene('endgame');
       this.hideWheel();
       this.playSfx('fanfare');
-      s.fillRect(0, 350, SCREEN_W, 7);
-      s.drawSprite(SPRITE.LOGO_POLE, 10 * SCREEN_W + 10, 7);
-      s.drawSprite(SPRITE.LOGO_CHUDES, 10 * SCREEN_W + 0xc8, 7);
-      s.drawSprite(SPRITE.YAKUBOVICH_BASE, 0xac * SCREEN_W + 0x1e0, 7);
-      s.drawSprite(SPRITE.YAKUBOVICH_PASSIVE, 0xad * SCREEN_W + 0x1ff, 16);
-      s.drawSprite(SPRITE.YAKUBOVICH_EYES_OPEN, 0xd1 * SCREEN_W + 0x214, 16);
 
       const line1 = `Товарищ ${name}!`;
-      s.print(line1, 0xbe * SCREEN_W + 0xf0 - (this.len(line1) << 2), 0, 14, 8);
       const line2 = this.supergameWon === true
         ? `Вы выиграли СУПЕР-ИГРУ и суперприз — ${this.superPrize}!`
         : this.supergameWon === false
@@ -1227,28 +1179,37 @@ class Game {
           : this.supergameBasket.length > 0
             ? `Вы забрали призы на ${basketTotal(this.supergameBasket)} рублей и набрали ${seat.score} очков!`
             : `Вы выиграли в ФИНАЛЕ и набрали ${seat.score} очков!`;
-      s.print(line2, (0xbe + 0x12) * SCREEN_W + 0xf0 - (this.len(line2) << 2), 0, 14, 8);
+
+      const L = ENDGAME_LAYOUT;
+      const lines: CeremonyLine[] = [
+        { text: line1, ...L.greeting },
+        { text: line2, ...L.summary },
+      ];
       if (this.supergameWon === true || (this.supergameWon === null && this.supergameBasket.length > 0)) {
         const basketLine = this.supergameWon === true
           ? `Плюс суперприз: ${this.superPrize}`
           : 'Ваши призы:';
-        s.print(basketLine, 0x2354c, 0, 14, 8);
-        let prizeY = 0x2354c + 0x1e * SCREEN_W;
+        lines.push({ text: basketLine, ...L.body });
+        let prizeY = L.body.y + L.prizeLineStep;
         for (const item of this.supergameBasket.slice(0, 4)) {
-          const line = `• ${item.name} — ${item.rubles} руб.`;
-          s.print(line, prizeY, 0, 14, 8);
-          prizeY += 0x12 * SCREEN_W;
+          lines.push({ text: `• ${item.name} — ${item.rubles} руб.`, x: L.body.x, y: prizeY });
+          prizeY += L.prizeLineStep;
         }
       } else {
-        s.print('Торговый дом ТУСАР и ПОЛЕ ЧУДЕС дарит Вам', 0x2354c, 0, 14, 8);
+        lines.push({ text: 'Торговый дом ТУСАР и ПОЛЕ ЧУДЕС дарит Вам', ...L.body });
         const prize = `${PRIZES[this.random(PRIZES.length)]} компании PROCTER & GAMBLE!`;
-        s.print(prize, (0xbe + 0x12 + 0x12 + 0x12) * SCREEN_W + 0xf0 - (this.len(prize) << 2), 0, 14, 8);
+        lines.push({ text: prize, ...L.giftPrize });
       }
-      s.print('За ПРИЗОМ обращайтесь по адресу:', 0x28f70, 0, 14, 8);
-      s.print('101000-Ц, Москва, проезд Серова, 11', 0x2bc64, 0, 14, 8);
-      s.print('На конверте сделайте пометку КОМПЬЮТЕРНЫЙ ПРИЗ', 0x2e938, 0, 14, 8);
-      s.print('Автор Дима Башуров из Российского Федерального Ядерного Центра', 0x33e48, 0, 8, 8);
-      s.print('Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', 0x354a0, 0, 8, 8);
+      lines.push(
+        { text: 'За ПРИЗОМ обращайтесь по адресу:', ...L.addressHeader },
+        { text: '101000-Ц, Москва, проезд Серова, 11', ...L.addressLine },
+        { text: 'На конверте сделайте пометку КОМПЬЮТЕРНЫЙ ПРИЗ', ...L.addressNote },
+        { text: 'Автор Дима Башуров из Российского Федерального Ядерного Центра', ...L.author, color: 8 },
+        { text: 'Телефон в Арзамасе-16 : (831-30) 5-92-73   E-mail: 0669 @ RFNC. NNOV. SU', ...L.authorContact, color: 8 },
+      );
+      ceremony.showStage(lines);
+      this.ctx.yak?.showIdle();
+
       await this.yakubovichTalk(
         this.supergameWon === true
           ? 'Вы выиграли супер-игру!'
@@ -1271,33 +1232,30 @@ class Game {
       }
     }
 
-    s.fillRect(0xb25c * 8, 0xa0, 160, 0);
-    s.print('8 лучших игроков,', BACKBUF + 0xaa * SCREEN_W + 0x1e9, 15, 14, 8);
-    s.print('8 лучших игроков,', BACKBUF + 0xaa * SCREEN_W + 0x1e8, 15, 14, 8);
-    s.print('выигравших ФИНАЛ!', BACKBUF + 0xb8 * SCREEN_W + 0x1e8, 15, 14, 8);
-    s.print('выигравших ФИНАЛ!', BACKBUF + 0xb8 * SCREEN_W + 0x1e8, 15, 14, 8);
-    let j = BACKBUF + 0x20a80;
+    const rows = [];
     for (let i = 0; i < 8; i += 1) {
       const entry = top[i] ?? { name: '', score: 0 };
-      const rank = `${i} ${entry.name}`; // 0-based ranks, as in the original (dpr:1623)
-      s.print(rank, j + 0x1e1, 8, 14, 8);
-      s.print(rank, j + 0x1e0, 8, 14, 8);
-      const scoreText = `${entry.score}$`;
-      const color = (i === inserted ? 2 : 0) + 3;
-      s.print(scoreText, j + 0x24f, color, 14, 8);
-      s.print(scoreText, j + 0x24e, color, 14, 8);
-      j += 14 * SCREEN_W;
+      rows.push({
+        rank: `${i} ${entry.name}`, // 0-based ranks, as in the original (dpr:1623)
+        score: `${entry.score}$`,
+        highlight: i === inserted,
+      });
     }
-    j = 0x32960;
-    let k = 20;
-    for (let i = 79; i >= 0; i -= 1) {
-      await this.m.audio.sound(k, 10);
-      s.screenCopy(152, 160 - i - i, j, BACKBUF + 0x19e60);
-      j -= 1280;
-      k += 20;
-      await this.delay(i);
-    }
+    ceremony.showTop8(rows);
+    this.ctx.yak?.setVisible(false);
+
+    await animateFrames({
+      frameCount: TOP8_I0 + 1,
+      delayMs: (frame) => TOP8_I0 - frame,
+      onFrame: async (frame) => {
+        const i = TOP8_I0 - frame;
+        ceremony.setTop8Rise(i);
+        await this.m.audio.sound(20 + frame * 20, 10);
+      },
+      delay: (ms) => this.delay(ms),
+    });
     await this.waitKey(INFINITE);
+    ceremony.setVisible(false);
     this.setScene('done');
     this.ctx.persist?.clear();
   }
@@ -1308,7 +1266,6 @@ class Game {
     const resume = this.ctx.resume;
     if (resume) {
       this.applyResume(resume);
-      this.ctx.present?.setMode('svg');
       this.paintRestoredStudio();
       if (this.skipToTurns) {
         this.snapshotRoundToBackbuf();
